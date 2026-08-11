@@ -1,0 +1,50 @@
+[
+  {
+    "id": "6a4b9513b3874a6c3939b8ce",
+    "name": "💼Work",
+    "sortOrder": -6322191859712,
+    "groupId": "6a4ecf3130a4981861fda01e",
+    "viewMode": "list",
+    "kind": "TASK"
+  },
+  {
+    "id": "6a4b9513b3874a6c3939b8cf",
+    "name": "✨Personal",
+    "sortOrder": -6459630813184,
+    "groupId": "6a4ecf3130a4981861fda01e",
+    "viewMode": "list",
+    "kind": "TASK"
+  },
+  {
+    "id": "6a4e2c6a8f0800bd4bc75bce",
+    "name": "💪Body & Health",
+    "sortOrder": -4100262111915,
+    "groupId": "6a4e2b8503836f336af7973a",
+    "viewMode": "list",
+    "kind": "TASK"
+  },
+  {
+    "id": "6a4e2e5f8f0800bd4bc79902",
+    "name": "🗃Career & Finances",
+    "sortOrder": -4065902373547,
+    "groupId": "6a4e2b8503836f336af7973a",
+    "viewMode": "list",
+    "kind": "TASK"
+  },
+  {
+    "id": "6a4e306b8f0800bd4bc7d1b8",
+    "name": "📦Assets",
+    "sortOrder": -4048722504363,
+    "groupId": "6a4e2b8503836f336af7973a",
+    "viewMode": "list",
+    "kind": "TASK"
+  },
+  {
+    "id": "6f1e2d3c4b5a69788796a5b4",
+    "name": "🛡Work",
+    "sortOrder": -1969958333099,
+    "groupId": "6a7ae01236baf240c99dd8e1",
+    "viewMode": "list",
+    "kind": "TASK"
+  }
+]

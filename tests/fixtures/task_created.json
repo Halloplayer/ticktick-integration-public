@@ -1,0 +1,18 @@
+{
+  "id": "6a7aeca98f0821e72441ca5d",
+  "projectId": "6f1e2d3c4b5a69788796a5b4",
+  "sortOrder": -1099511627776,
+  "title": "probe task",
+  "content": "[sync:probe-1]",
+  "timeZone": "Europe/Vienna",
+  "isAllDay": false,
+  "priority": 3,
+  "isFloating": false,
+  "status": 0,
+  "tags": [],
+  "etag": "g4qr1ond",
+  "etimestamp": 1786440873345,
+  "kind": "TEXT",
+  "modifiedTime": "2026-08-11T09:34:33.341+0000",
+  "createdTime": "2026-08-11T09:34:33.341+0000"
+}
