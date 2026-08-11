@@ -79,9 +79,9 @@ Everything the mirror knows lives in the data directory, keyed by the repo slug
   sync.log                          shared; every line prefixed with the slug
   repos\
     globex__toolkit\
-      config.toml                   repo, list_id, list_name, items_path
+      config.toml                   repo, list_id, list_name, items_path, language
       state.json                    key -> task id, last_count
-      issue-descriptions.toml       hand-written translations
+      issue-descriptions.toml       hand-written translations (only read if language = "en")
     acme__widgets\
       ...
 ```
@@ -124,6 +124,41 @@ exactly this purpose, and the original is renamed to
 Verbatim, not regenerated, because `state.json` carries `last_count` -- the
 number that ARMS the collapse guard. A fresh zero would disarm that guard for
 one run, on a live list.
+
+## Choosing a language
+
+Each repository's `config.toml` carries `language = "de"` or `language =
+"en"`. **`"de"` is the default** for any repository that has never said
+otherwise -- most of the issues this mirror reads are written in German to
+begin with, and in `"de"` mode a task's title and description stay exactly
+as GitHub wrote them. That is a genuine advantage, not a fallback: there is
+nothing to keep translated by hand, so an upstream issue can be edited
+freely with zero upkeep on this side -- no `issue-descriptions.toml`, no
+`[untranslated]` markers, no `untranslated=N` in the summary line, because
+none of that means anything when nothing is being translated.
+
+`"en"` is the mirror's original behaviour, unchanged: every issue title and
+description is translated by hand into `repos\<slug>\issue-descriptions.toml`
+(see "Issue descriptions AND titles are translated by hand" below), and a
+stale or missing translation shows up loudly rather than silently. Setup
+(step 4 of the skill) asks which one you want; `setup.py init --language de`
+(or `--language en`) writes it explicitly.
+
+**Migrating a config that predates this setting.** A `config.toml` with no
+`language` key at all is resolved automatically, once, the first time it is
+loaded, and the decision is written back into the file so it happens exactly
+once: if that repository's `issue-descriptions.toml` already holds hand-written
+translations, it migrates to `"en"` -- silently reverting a repo with real,
+hand-translated work to German with no error at all would be the worst
+outcome available here. A repository with no translations file migrates to
+the default, `"de"`. Either way, `language` is now explicit in the file;
+edit it by hand to change it later.
+
+`open-items.toml`'s own `title_en` field (see "Item fields" above) is
+unrelated to this setting and always renders when present, in either
+language -- it is a hand-maintained translation living beside the German
+title it translates in the same file, not part of the `issue-descriptions.toml`
+cache this setting gates.
 
 ## Tags, and the one rule about `#`
 
@@ -330,6 +365,11 @@ see:
   start; only an unreadable one refuses.
 
 ## Issue descriptions AND titles are translated by hand
+
+**Everything below applies only when a repository's `language = "en"`** (see
+"Choosing a language" above). In `"de"`, the default, none of this cache is
+read at all: a task's description is simply the issue's own excerpt, verbatim,
+and its title is never preceded by a translated first line.
 
 Task descriptions must always be English, but a GitHub issue's own body is
 German, and the sync has no LLM and no translation API -- either would break

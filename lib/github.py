@@ -8,6 +8,7 @@ run then also sees what somebody else just pushed, without anyone calling
 import base64
 import hashlib
 import json
+import pathlib
 import re
 import subprocess
 import tomllib
@@ -192,12 +193,68 @@ def _translated_title(number, title, translations):
 GH_TIMEOUT_SECONDS = 60
 
 
+# The two rendering languages. German is the DEFAULT for any repository that
+# never says otherwise: most issues in the repos this mirrors are written in
+# German, and translating is opt-in work somebody has to keep up with by
+# hand (see load_translations). "en" is the historical behaviour -- the
+# whole translation subsystem below this point -- kept exactly as it was for
+# any repo that already relies on it.
+SUPPORTED_LANGUAGES = ("de", "en")
+DEFAULT_LANGUAGE = "de"
+
+
+def _check_language(value, repo):
+    """Same discipline as the item file's tag/status checks: name the value
+    AND the thing it is wrong on, so a typo in config.toml is diagnosable
+    from the log line alone."""
+    if value not in SUPPORTED_LANGUAGES:
+        raise GitHubReadFailed(
+            "config for '%s' has invalid language '%s' (must be 'de' or 'en')"
+            % (repo, value))
+
+
+def _migrate_language(config, path):
+    """Decide `language` for a config that does not name one yet, and WRITE
+    the decision back into `path` so the inference happens exactly once.
+
+    The rule that matters: an already-live English repo must never revert to
+    German by accident. `globex/toolkit` is configured in English
+    today and has a populated `issue-descriptions.toml` holding hand-written
+    translations -- if it silently picked up the new German default, every
+    one of those would go dark on the next run with no error at all, because
+    German is a perfectly legitimate configuration. So: a config with no
+    `language` key whose repo directory holds a non-empty
+    `issue-descriptions.toml` migrates to "en"; one with no translations file
+    (or none at all -- the normal state of a brand-new repo) migrates to the
+    DEFAULT_LANGUAGE, "de". Either way the key is written into the file
+    itself, explicitly, so a second load sees it already set and does
+    nothing -- see load_config.
+    """
+    sibling = pathlib.Path(path).parent / "issue-descriptions.toml"
+    language = "en" if load_translations(str(sibling)) else DEFAULT_LANGUAGE
+    with open(path, "a", encoding="utf-8") as handle:
+        handle.write(
+            "\n# Rendering language for GitHub-issue titles/descriptions: \"de\" "
+            "(source language,\n# nothing translated -- the default) or \"en\" "
+            "(uses issue-descriptions.toml).\n# Set once, automatically, on first "
+            "load of a config with no language key; edit\n# by hand to change it.\n"
+            "language = \"%s\"\n" % language)
+    config["language"] = language
+    return config
+
+
 def load_config(path):
     with open(path, "rb") as handle:
-        return tomllib.load(handle)
+        config = tomllib.load(handle)
+    language = config.get("language")
+    if language is None:
+        config = _migrate_language(config, path)
+    else:
+        _check_language(language, config.get("repo", "?"))
+    return config
 
 
-def issues_to_items(payload, translations=None):
+def issues_to_items(payload, translations=None, language="en"):
     """The issue's own name, its own priority label, nothing added.
 
     The title is passed through exactly as GitHub returns it -- the issues are
@@ -206,23 +263,33 @@ def issues_to_items(payload, translations=None):
     models.sanitise). The number returns as the `[Issue -> N] ` PREFIX
     instead, ahead of the name -- an explicit owner decision, not a `#`.
 
-    The description is an excerpt of the issue body, so the task says what it
-    is about without anything being opened -- but a task's description must
-    always be English (see UNTRANSLATED_PREFIX / _translated_description),
+    `language` gates the entire translation subsystem below, one repo at a
+    time (config.toml's `language`, resolved by load_config/read_desired --
+    see DEFAULT_LANGUAGE). Two branches, deliberately kept apart rather than
+    threaded through the "en" machinery with an early-exit: "de" means NOTHING
+    is translated, so there is no cache to consult, no hash to compare and
+    nothing that can go stale -- the description is simply the excerpt, as
+    written, and `untranslated` is always False, because there is nothing
+    that could be untranslated. This is the default for any repo that has
+    never said otherwise.
+
+    In "en" (kept exactly as it always behaved, for any repo relying on it):
+    the description is an excerpt of the issue body, but a task's description
+    must always be English (see UNTRANSLATED_PREFIX / _translated_description),
     while an issue body is German. `translations` is the cache read by
     load_translations(); read_desired() always supplies it, so a description
     reaching TickTick is either a hand-translated cache hit or a visibly
     marked, counted fallback -- never a silent German excerpt. The marker
     comes last, because the first line is what the app shows.
 
-    The TITLE itself stays German (see above) -- but when a cached English
-    translation exists for it (_translated_title), that translation opens the
-    BODY as its own first line, ahead of the description, so a reader sees
-    what the task is in English before anything else. The title used for
-    this is the issue's own, via `issue.get("title")` -- NOT the mirrored
-    Item's title built below, which by then carries the ISSUE_PREFIX. The
-    prefix annotates the mirrored task; it is not part of what GitHub called
-    the issue and must not be translated (see also
+    The TITLE itself stays German (see above) -- but in "en", when a cached
+    English translation exists for it (_translated_title), that translation
+    opens the BODY as its own first line, ahead of the description, so a
+    reader sees what the task is in English before anything else. The title
+    used for this is the issue's own, via `issue.get("title")` -- NOT the
+    mirrored Item's title built below, which by then carries the
+    ISSUE_PREFIX. The prefix annotates the mirrored task; it is not part of
+    what GitHub called the issue and must not be translated (see also
     test_the_title_prefix_does_not_leak_into_the_bodys_translated_first_line
     in test_github.py, which guards this seam).
     """
@@ -233,12 +300,16 @@ def issues_to_items(payload, translations=None):
         labels = [label["name"] for label in issue.get("labels", [])]
         tags = tag_set(label for label in labels if label in PRIORITY_LABELS)
         parts = []
-        title_line, title_untranslated = _translated_title(
-            issue["number"], issue.get("title"), translations)
+        if language == "de":
+            title_line, title_untranslated = None, False
+            description, desc_untranslated = excerpt(issue.get("body")), False
+        else:
+            title_line, title_untranslated = _translated_title(
+                issue["number"], issue.get("title"), translations)
+            description, desc_untranslated = _translated_description(
+                issue["number"], excerpt(issue.get("body")), translations)
         if title_line:
             parts += [title_line, ""]
-        description, desc_untranslated = _translated_description(
-            issue["number"], excerpt(issue.get("body")), translations)
         if description:
             parts += [description, ""]
         if issue.get("url"):
@@ -529,6 +600,15 @@ def read_desired(config, run=subprocess.run, translations_path=None):
 
     `translations_path` points at THIS repository's translation cache (see
     load_translations); each mirrored repo has its own, or none.
+
+    `config["language"]` (see DEFAULT_LANGUAGE, issues_to_items) decides
+    whether that cache is consulted at all. In "de" it is not read AT ALL --
+    not even as an empty-cache fallback -- because there is nothing for it to
+    do: nothing is translated, so a missing file is not a gap to report on.
+    load_config() is the normal way a config gets its `language`, migrating
+    or defaulting one in if the file does not name it; a config assembled by
+    hand (as plenty of tests here do) that also omits `language` gets the
+    same DEFAULT_LANGUAGE, "de".
     """
     ISSUE_LIMIT = 200
     raw_issues = _gh(["issue", "list", "--repo", config["repo"], "--state", "open",
@@ -549,6 +629,9 @@ def read_desired(config, run=subprocess.run, translations_path=None):
     except (json.JSONDecodeError, KeyError, ValueError) as error:
         raise GitHubReadFailed("item list not readable: %s" % error)
 
-    desired = issues_to_items(issues, load_translations(translations_path))
+    language = config.get("language", DEFAULT_LANGUAGE)
+    _check_language(language, config.get("repo", "?"))
+    translations = load_translations(translations_path) if language != "de" else {}
+    desired = issues_to_items(issues, translations, language=language)
     desired.update(toml_to_items(text))
     return desired

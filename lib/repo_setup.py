@@ -60,13 +60,20 @@ def _by_hand(name, reason):
 
 
 def write_repo_config(data_dir, slug, repo, list_id, list_name,
-                      items_path="open-items.toml"):
+                      items_path="open-items.toml", language="de"):
     """Write `repos/<slug>/config.toml` and return its path.
 
     Keyed on the id with the name as a guard on it, exactly as the single-repo
     config was: mirroring machine tasks into the wrong list of somebody's
     personal task manager must fail loudly, so a mismatch between the two is
     an error rather than a fallback (see `ticktick.resolve_list`).
+
+    `language` is written explicitly, always -- never left absent for
+    `github.load_config` to infer later. Setup already asked the user (see
+    SKILL.md) and knows the answer, "de" if they did not say otherwise; a
+    freshly created repository has no `issue-descriptions.toml` for the
+    migration heuristic to reason about anyway, so writing the key up front
+    is both simpler and more honest than leaving it to be inferred.
     """
     directory = repos.repo_dir(data_dir, slug)
     directory.mkdir(parents=True, exist_ok=True)
@@ -82,8 +89,12 @@ def write_repo_config(data_dir, slug, repo, list_id, list_name,
         "# wrong id fails loudly instead of silently mirroring into some other\n"
         "# list.\n"
         "list_id = %s\n"
-        "list_name = %s\n" % (_toml(repo), _toml(items_path), _toml(list_id),
-                              _toml(list_name)),
+        "list_name = %s\n"
+        "\n"
+        "# Rendering language for GitHub-issue titles/descriptions: \"de\" (source\n"
+        "# language, nothing translated) or \"en\" (uses issue-descriptions.toml).\n"
+        "language = %s\n" % (_toml(repo), _toml(items_path), _toml(list_id),
+                             _toml(list_name), _toml(language)),
         encoding="utf-8")
     return str(path)
 

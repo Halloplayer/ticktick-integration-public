@@ -9,6 +9,15 @@ convention existed, and back-filling them would mean inventing numbers.
 ## [Unreleased]
 
 ### Added
+- **Per-repository rendering language.** `config.toml` gained `language = "de"` or `"en"`. `"de"`,
+  the new default, renders every task title and description exactly as written -- no
+  `issue-descriptions.toml` lookup, no translated-title line, no `[untranslated]` prefix and no
+  `untranslated=N` in the summary line, because nothing is being translated. `"en"` is the mirror's
+  original behaviour, unchanged. A config with no `language` key migrates automatically, once, the
+  first time it loads: to `"en"` if its repo's `issue-descriptions.toml` already holds translations
+  (so the live `globex/toolkit` config, English today, cannot silently revert to German), to
+  `"de"` otherwise -- the decision is written back into `config.toml` so it happens exactly once.
+  `setup.py init` gained `--language` and the skill now asks which one the user wants.
 - **Conversational setup for a new repository**, driven by the rewritten
   `SKILL.md` plus `skills/ticktick-sync/scripts/setup.py`. It derives the slug
   from `git remote get-url origin` and has the user confirm it, reports whether

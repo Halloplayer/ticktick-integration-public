@@ -75,9 +75,10 @@ def cmd_init(args):
     slug = repos.slug_for(args.repo)
     path = setup_lib.write_repo_config(sync.DATA, slug, repo=args.repo,
                                        list_id=args.list_id, list_name=args.list_name,
-                                       items_path=args.items_path)
+                                       items_path=args.items_path, language=args.language)
     print("slug=%s" % slug)
     print("config=%s" % path)
+    print("language=%s" % args.language)
     return 0
 
 
@@ -111,6 +112,10 @@ def main(argv=None):
     four.add_argument("--list-id", required=True)
     four.add_argument("--list-name", required=True)
     four.add_argument("--items-path", default="open-items.toml")
+    four.add_argument("--language", default="de", choices=["de", "en"],
+                      help="rendering language for GitHub-issue titles/descriptions: "
+                           "'de' (default -- source language, nothing translated) or "
+                           "'en' (uses issue-descriptions.toml)")
     four.set_defaults(run=cmd_init)
 
     five = sub.add_parser("open-items", help="create the neutral item list in the repo")

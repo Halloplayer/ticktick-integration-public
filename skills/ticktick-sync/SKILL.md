@@ -80,16 +80,31 @@ to fill -- the mirror reads it, nothing writes it. The file's own comments
 explain its shape; `README.md` documents the fields and the twelve permitted
 tags.
 
-## 4. Write the configuration and sync
+## 4. Ask which language to render in
+
+Ask the user: **German or English?** German (`de`) is the **default** -- say
+so, and say why it is worth choosing even though English is what this mirror
+has always done: in German, task titles and descriptions stay exactly as
+GitHub wrote them, so there is nothing to keep up with by hand when an
+upstream issue is edited -- no `issue-descriptions.toml` to maintain, no
+`[untranslated]` markers ever appearing because a translation went stale.
+That is a genuine advantage of German, not a fallback -- most issues in these
+repos are written in German to begin with. English (`en`) instead translates
+every issue title and description by hand into `issue-descriptions.toml`,
+kept current as issues change; choose it only if the user actually wants
+English tasks and is willing to maintain that cache.
+
+## 5. Write the configuration and sync
 
 ```bash
 PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/ticktick-sync/scripts/setup.py" init \
-  --repo "<owner/repo>" --list-id "<list id>" --list-name "<list name>"
+  --repo "<owner/repo>" --list-id "<list id>" --list-name "<list name>" --language de
 ```
 
-That writes `repos/<slug>/config.toml` in the data directory -- **never** in the
-repository being mirrored. Then run the first sync (next section) and report
-what it did.
+`--language` is `de` or `en` (default `de` if omitted -- but ask explicitly
+rather than relying on that). That writes `repos/<slug>/config.toml` in the
+data directory -- **never** in the repository being mirrored. Then run the
+first sync (next section) and report what it did.
 
 ## Run
 
