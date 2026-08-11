@@ -1,0 +1,4 @@
+.env
+state.json
+sync.log
+__pycache__/
