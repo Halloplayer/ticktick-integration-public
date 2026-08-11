@@ -11,6 +11,16 @@ from .models import Task, display_tags, key_from_body, tag_set
 BASE = "https://api.ticktick.com/open/v1"
 DONE = 2  # TickTick: status 2 == done
 
+# Sent explicitly on every write, and NOT omitted. The mirror expresses
+# everything through tags and uses TickTick's own priorities for nothing at
+# all -- but saying that to this API requires saying it out loud. Section 8 of
+# docs/api-notes.md measured that POST /task/{id} MERGES: a field left out of
+# the payload keeps its old value. Omitting `priority` therefore left nine of
+# the fifteen live tasks still flying the flags they were given before tags
+# existed, in parallel with their new P0/P1/P2 tags. An explicit zero is the
+# only way to assert an absence to an API that merges.
+NO_PRIORITY = 0
+
 
 class TickTickError(Exception):
     pass
@@ -30,7 +40,8 @@ def tasks_from_payload(payload):
             continue
         tasks[key] = Task(key=key, task_id=raw["id"], title=raw.get("title", ""),
                           body=body, tags=tag_set(raw.get("tags")),
-                          completed=raw.get("status", 0) == DONE)
+                          completed=raw.get("status", 0) == DONE,
+                          priority=raw.get("priority", 0) or 0)
     return tasks
 
 
@@ -91,14 +102,21 @@ class Client:
         """
         created = self._calls("POST", "/task", {
             "projectId": project_id, "title": item.title,
-            "content": item.body, "tags": display_tags(item.tags)})
+            "content": item.body, "tags": display_tags(item.tags),
+            "priority": NO_PRIORITY})
         return (created or {}).get("id")
 
     def update(self, project_id, task_id, item):
-        """`status: 0` also re-opens a completed task -- measured in Task 1."""
+        """`status: 0` also re-opens a completed task -- measured in Task 1.
+
+        `priority` is sent explicitly, for the reason recorded at NO_PRIORITY:
+        this endpoint merges, so leaving the field out preserves whatever flag
+        the task already had instead of clearing it.
+        """
         self._calls("POST", "/task/%s" % task_id,
                     {"id": task_id, "projectId": project_id, "title": item.title,
-                     "content": item.body, "tags": display_tags(item.tags), "status": 0})
+                     "content": item.body, "tags": display_tags(item.tags),
+                     "priority": NO_PRIORITY, "status": 0})
 
     def complete(self, project_id, task_id):
         self._calls("POST", "/project/%s/task/%s/complete" % (project_id, task_id))

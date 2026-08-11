@@ -123,13 +123,20 @@ class Item:
 
 @dataclass(frozen=True)
 class Task:
-    """A task as it currently stands in TickTick."""
+    """A task as it currently stands in TickTick.
+
+    `priority` is carried here even though the mirror uses TickTick's own
+    priorities for nothing: an Item has no such field, so this one exists
+    solely to NOTICE a flag that is still set. Tasks made before tags existed
+    kept theirs, and a value that cannot be seen cannot be cleared.
+    """
     key: str
     task_id: str
     title: str
     body: str
     tags: frozenset = frozenset()
     completed: bool = False
+    priority: int = 0
 
 
 @dataclass(frozen=True)

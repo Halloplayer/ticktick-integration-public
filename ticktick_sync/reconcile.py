@@ -44,10 +44,19 @@ def _differs(task, item):
     Anything less would differ on every run -- TickTick stores tags lowercase
     on create but echoes the sent case on update -- and rewrite all fifteen
     tasks every five minutes, forever.
+
+    A leftover TickTick priority counts as a difference too. The mirror
+    asserts that a mirrored task has none, so a flag still set is drift from
+    what the repo says. Without this the repair could not fire at all: those
+    tasks match on every other field, so no action would be produced, no
+    payload would be sent, and the explicit `priority: 0` would never reach
+    them. Clearing one settles it -- the next read sees zero and the
+    comparison goes quiet again, so this heals once rather than churning.
     """
     return (task.title != item.title
             or task.body != item.body
             or task.tags != item.tags
+            or task.priority != 0
             or task.completed)
 
 

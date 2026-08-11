@@ -18,10 +18,10 @@ def item(key, title="Title", body="", tags=()):
                        tags=models.tag_set(tags))
 
 
-def task(key, task_id="t1", title="Title", body=None, tags=(), completed=False):
+def task(key, task_id="t1", title="Title", body=None, tags=(), completed=False, priority=0):
     return models.Task(key=key, task_id=task_id, title=title,
                        body=models.marker(key) if body is None else body,
-                       tags=models.tag_set(tags), completed=completed)
+                       tags=models.tag_set(tags), completed=completed, priority=priority)
 
 
 class ReconcileTest(unittest.TestCase):
@@ -50,6 +50,30 @@ class ReconcileTest(unittest.TestCase):
     def test_an_already_completed_orphan_is_left_alone(self):
         """Otherwise every run would re-send the same completion forever."""
         self.assertEqual([], reconcile({}, {"gh-1": task("gh-1", completed=True)}))
+
+
+class StalePriorityTest(unittest.TestCase):
+    """Sending `priority: 0` only helps if something makes us send anything.
+
+    Nine live tasks were created before tags existed and still carry their old
+    priority flags. Everything else about them now matches the repo, so
+    reconcile produces no action for them, so no payload is ever sent, so the
+    explicit zero never reaches them and the flags survive forever. The write
+    fix and this comparison are two halves of one repair.
+
+    This is not "using priorities": the mirror asserts there is no priority,
+    and a task that disagrees has drifted from what the repo says.
+    """
+
+    def test_a_task_still_carrying_a_priority_is_updated_back_to_none(self):
+        actions = reconcile({"gh-1": item("gh-1")}, {"gh-1": task("gh-1", priority=3)})
+
+        self.assertEqual([models.Update("t1", item("gh-1"))], actions)
+
+    def test_a_task_at_priority_zero_produces_nothing(self):
+        """And once cleared it must stay quiet -- otherwise this repair
+        becomes its own churn loop, rewriting all fifteen every five minutes."""
+        self.assertEqual([], reconcile({"gh-1": item("gh-1")}, {"gh-1": task("gh-1", priority=0)}))
 
 
 class TagChurnTest(unittest.TestCase):

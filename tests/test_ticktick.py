@@ -13,7 +13,7 @@ PROJECT_DATA = {
     "tasks": [
         {"id": "t1", "title": "Retrieval verification",
          "content": marker("gh-12") + "\nhttps://example.invalid/12",
-         "tags": ["p1", "draft"], "status": 0},
+         "tags": ["p1", "draft"], "priority": 3, "status": 0},
         {"id": "t2", "title": "Made by hand", "content": "no marker",
          "status": 0},
         {"id": "t3", "title": "Question generation",
@@ -50,14 +50,27 @@ class ReadTasksTest(unittest.TestCase):
     def test_a_task_without_tags_has_an_empty_set_not_none(self):
         self.assertEqual(frozenset(), ticktick.tasks_from_payload(PROJECT_DATA)["gh-11"].tags)
 
+    def test_a_priority_left_over_from_before_is_read_back(self):
+        """Not to use it -- to notice it. A priority the mirror never set is
+        drift, and it cannot be cleared without first being seen."""
+        self.assertEqual(3, ticktick.tasks_from_payload(PROJECT_DATA)["gh-12"].priority)
+
+    def test_a_task_without_a_priority_reads_back_as_zero(self):
+        self.assertEqual(0, ticktick.tasks_from_payload(PROJECT_DATA)["gh-11"].priority)
+
 
 class WritePayloadTest(unittest.TestCase):
     """What actually goes over the wire.
 
-    TickTick priorities are not used at all any more, and `priority: 0` is not
-    the same as saying nothing: it would overwrite a priority the owner set by
-    hand on a mirrored task. Section 8 of docs/api-notes.md measured that an
-    omitted field is left alone -- so omitting is how we keep our hands off.
+    TickTick priorities are not used at all any more -- and saying that to
+    this API means sending `priority: 0`, not omitting the field.
+
+    Section 8 of docs/api-notes.md measured that `POST /task/{id}` MERGES.
+    An omitted field therefore keeps whatever was there, which is exactly
+    what happened: after the first deploy, nine of the fifteen live tasks
+    still flew their old priority flags beside the new P0/P1/P2 tags -- the
+    duplicated signal this whole change existed to remove. To a merging API,
+    an explicit zero is the only way to assert that there is no priority.
     """
 
     def _client_capturing(self, captured):
@@ -70,17 +83,19 @@ class WritePayloadTest(unittest.TestCase):
         return models.Item(key="oi-x", title="An item", body=marker("oi-x"),
                            tags=models.tag_set(["Draft", "P1"]))
 
-    def test_create_sends_no_priority_field_at_all(self):
+    def test_create_clears_the_priority_explicitly(self):
         captured = []
         self._client_capturing(captured).create("p1", self._item())
 
-        self.assertNotIn("priority", captured[0][2])
+        self.assertEqual(0, captured[0][2]["priority"])
 
-    def test_update_sends_no_priority_field_at_all(self):
+    def test_update_clears_the_priority_explicitly(self):
+        """The one that actually matters: a task created before this change
+        carries a priority, and only an explicit zero takes it away."""
         captured = []
         self._client_capturing(captured).update("p1", "t1", self._item())
 
-        self.assertNotIn("priority", captured[0][2])
+        self.assertEqual(0, captured[0][2]["priority"])
 
     def test_create_sends_the_tags_as_a_list_of_plain_strings(self):
         captured = []
