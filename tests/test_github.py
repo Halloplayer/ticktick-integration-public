@@ -52,13 +52,18 @@ class IssueMappingTest(unittest.TestCase):
     def test_every_open_issue_becomes_one_item(self):
         self.assertEqual({"gh-12", "gh-11"}, set(github.issues_to_items(ISSUES)))
 
-    def test_the_title_is_the_github_title_and_nothing_else(self):
-        """The `#12 ` prefix this mirror used to prepend was its own invention
-        -- and TickTick turns any `#token` in a task's text into a TAG, so it
-        was quietly minting tags named `12`, `11`, `14` in the owner's account.
-        The issue's name is the issue's name."""
-        self.assertEqual("Pruefung der importierten Datensaetze",
+    def test_an_issue_title_is_the_github_title_plus_its_issue_suffix(self):
+        """The name itself is untouched -- German, verbatim, no `#12 ` prefix
+        (that prefix was this mirror's own invention and TickTick turned it
+        into a TAG). The number returns at the END, where it annotates the
+        name instead of displacing it."""
+        self.assertEqual("Pruefung der importierten Datensaetze [Issue -> 12]",
                          github.issues_to_items(ISSUES)["gh-12"].title)
+
+    def test_every_promoted_issue_carries_the_issue_suffix(self):
+        for key, item in github.issues_to_items(ISSUES).items():
+            self.assertTrue(item.title.endswith("]"), "%s: %r" % (key, item.title))
+            self.assertIn(" [Issue -> ", item.title)
 
     def test_the_body_carries_the_key_and_the_url(self):
         body = github.issues_to_items(ISSUES)["gh-12"].body
@@ -97,17 +102,18 @@ class IssueMappingTest(unittest.TestCase):
         self.assertIn("[sync:gh-11]", body)
         self.assertIn("Source: https://github.com/globex/toolkit/issues/11", body)
 
-    def test_the_german_title_is_passed_through_verbatim(self):
+    def test_the_german_name_itself_is_passed_through_verbatim(self):
         """The owner reads these on their phone as GitHub wrote them. Nothing
-        here translates, trims or decorates an issue title."""
-        self.assertEqual("Neues Werkzeug zur Berichterstellung",
+        here translates or trims an issue's name; only the suffix is added."""
+        self.assertEqual("Neues Werkzeug zur Berichterstellung [Issue -> 11]",
                          github.issues_to_items(ISSUES)["gh-11"].title)
 
-    def test_an_issue_title_never_gets_a_related_suffix(self):
-        """`(issue N related)` marks an ITEM that points at an issue. An issue
-        IS the issue, so the suffix would be nonsense on it."""
+    def test_an_issue_never_gets_the_RELATED_suffix(self):
+        """Three suffixes exist and they are not interchangeable. `Issue
+        Related` marks an ITEM that points at an issue; an issue IS the issue,
+        so it takes the plain `Issue ->` form instead."""
         for item in github.issues_to_items(ISSUES).values():
-            self.assertNotIn("related", item.title)
+            self.assertNotIn("Related", item.title)
 
     def test_a_priority_label_becomes_the_matching_tag(self):
         self.assertEqual({"p1"}, set(github.issues_to_items(ISSUES)["gh-12"].tags))
@@ -232,16 +238,16 @@ class ItemFileTest(unittest.TestCase):
         shared repo; a stray one must not abort an unattended run."""
         self.assertIn("oi-abgleich-modus-c", github.toml_to_items(ITEMS_TOML))
 
-    def test_related_appends_the_marker_in_square_brackets(self):
+    def test_related_appends_the_issue_related_suffix(self):
         """Square brackets, capitalised, and LAST -- so a long German draft
         title is not pushed off the visible line by our own annotation."""
-        self.assertEqual("Structured checked-record provenance field [Issue 12 Related]",
+        self.assertEqual("Structured checked-record provenance field [Issue Related -> 12]",
                          github.toml_to_items(ITEMS_TOML)["oi-datensatz-geprueft-feld"].title)
 
     def test_the_related_marker_is_the_very_end_of_the_title(self):
         self.assertTrue(
             github.toml_to_items(ITEMS_TOML)["oi-datensatz-geprueft-feld"].title
-            .endswith(" [Issue 12 Related]"))
+            .endswith(" [Issue Related -> 12]"))
 
     def test_without_related_the_title_carries_no_suffix(self):
         title = github.toml_to_items(ITEMS_TOML)["oi-abgleich-modus-c"].title
@@ -300,6 +306,85 @@ class ItemFileTest(unittest.TestCase):
         possible response to a broken file."""
         with self.assertRaises(github.GitHubReadFailed):
             github.toml_to_items("[[items]\nid = broken")
+
+
+GERMAN_DRAFT_TITLE = ("abgleich — neues Werkzeug, das die erfassten Datenluecken "
+                      "als Entwuerfe im Bestand schliesst")
+
+
+class DraftLinkTest(unittest.TestCase):
+    """A clarification that belongs to a draft names it by ID.
+
+    The suffix shows the draft's full title, but the FILE stores only the id
+    and the renderer looks it up. Copying the title would duplicate a long
+    German string that drifts the moment the draft is renamed -- and a
+    clarification pointing at a title that no longer exists is worse than one
+    pointing at nothing, because it looks right.
+    """
+
+    def _toml(self, extra, tags='["Clarification"]', with_draft=True):
+        draft = ('[[items]]\nid = "abgleich-modus-c"\ntitle = "%s"\n'
+                 'tags = ["Draft"]\nsource = "ISSUE-20240115090000"\n\n'
+                 % GERMAN_DRAFT_TITLE) if with_draft else ""
+        return ('version = 1\n\n%s[[items]]\nid = "q"\ntitle = "A question?"\n'
+                'tags = %s\n%s\n' % (draft, tags, extra))
+
+    def test_the_suffix_carries_the_drafts_full_title(self):
+        """Asserted verbatim, German and all: a truncation or a translation
+        must break the build rather than ship."""
+        items = github.toml_to_items(self._toml('related_draft = "abgleich-modus-c"'))
+
+        self.assertEqual("A question? [Draft Related -> %s]" % GERMAN_DRAFT_TITLE,
+                         items["oi-q"].title)
+
+    def test_the_draft_title_is_not_truncated(self):
+        items = github.toml_to_items(self._toml('related_draft = "abgleich-modus-c"'))
+
+        self.assertTrue(items["oi-q"].title.endswith("Bestand schliesst]"),
+                        items["oi-q"].title)
+
+    def test_an_unknown_related_draft_raises_and_names_it(self):
+        with self.assertRaises(github.GitHubReadFailed) as caught:
+            github.toml_to_items(self._toml('related_draft = "no-such-draft"'))
+
+        self.assertIn("no-such-draft", str(caught.exception))
+
+    def test_a_related_draft_pointing_at_a_non_draft_raises(self):
+        text = ('version = 1\n\n[[items]]\nid = "plain"\ntitle = "Not a draft"\n'
+                'tags = ["Task"]\n\n[[items]]\nid = "q"\ntitle = "A question?"\n'
+                'tags = ["Clarification"]\nrelated_draft = "plain"\n')
+
+        with self.assertRaises(github.GitHubReadFailed) as caught:
+            github.toml_to_items(text)
+
+        self.assertIn("plain", str(caught.exception))
+
+    def test_related_and_related_draft_together_raise(self):
+        """They render two different suffixes; an item has one name."""
+        with self.assertRaises(github.GitHubReadFailed) as caught:
+            github.toml_to_items(
+                self._toml('related = 12\nrelated_draft = "abgleich-modus-c"'))
+
+        self.assertIn("q", str(caught.exception))
+
+    def test_related_draft_on_a_non_clarification_raises(self):
+        for tags in ('["Task"]', '["Bug"]'):
+            with self.assertRaises(github.GitHubReadFailed) as caught:
+                github.toml_to_items(
+                    self._toml('related_draft = "abgleich-modus-c"', tags=tags))
+
+            self.assertIn("q", str(caught.exception))
+
+    def test_a_draft_may_not_point_at_anything_itself(self):
+        """A draft is the thing being pointed AT."""
+        for field in ('related = 12', 'related_draft = "abgleich-modus-c"'):
+            text = ('version = 1\n\n[[items]]\nid = "abgleich-modus-c"\ntitle = "T"\n'
+                    'tags = ["Draft"]\nsource = "ISSUE-1"\n%s\n' % field)
+
+            with self.assertRaises(github.GitHubReadFailed) as caught:
+                github.toml_to_items(text)
+
+            self.assertIn("abgleich-modus-c", str(caught.exception))
 
 
 class TagScopeTest(unittest.TestCase):
@@ -444,7 +529,7 @@ class LiveItemFileTest(unittest.TestCase):
             return github.toml_to_items(handle.read())
 
     def test_every_live_item_satisfies_the_tag_scope_rule(self):
-        self.assertEqual(12, len(self._items()))
+        self.assertEqual(14, len(self._items()))
 
     def test_no_live_item_carries_a_hash(self):
         for key, item in self._items().items():
@@ -482,7 +567,7 @@ class HashFreeTest(unittest.TestCase):
 
     def test_no_file_item_carries_a_hash_in_its_title_or_body(self):
         """Covers an item WITH `related` set -- the suffix that used to read
-        `(#12 related)` and now reads `(issue 12 related)`."""
+        `(#12 related)` and now reads ` [Issue Related -> 12]`."""
         items = github.toml_to_items(ITEMS_TOML)
         self.assertIn("oi-datensatz-geprueft-feld", items, "the related-bearing item must be in scope")
         for key, item in items.items():

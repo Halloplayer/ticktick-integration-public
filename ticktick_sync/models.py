@@ -49,7 +49,8 @@ PLAIN_PRIORITY_TAGS = frozenset({"p0", "p1", "p2", "p3"})
 PROPOSED_PRIORITY_TAGS = frozenset({"_p0", "_p1", "_p2", "_p3"})
 PRIORITY_TAGS = PLAIN_PRIORITY_TAGS | PROPOSED_PRIORITY_TAGS
 DRAFT_TAG = "draft"
-NON_ISSUE_TAGS = frozenset({"task", "bug", "clarification"})
+CLARIFICATION_TAG = "clarification"
+NON_ISSUE_TAGS = frozenset({"task", "bug", CLARIFICATION_TAG})
 
 
 def check_tag(tag):

@@ -11,9 +11,9 @@ import re
 import subprocess
 import tomllib
 
-from .models import (DRAFT_TAG, NON_ISSUE_TAGS, PLAIN_PRIORITY_TAGS, PRIORITY_TAGS,
-                     PROPOSED_PRIORITY_TAGS, Item, check_tag, issue_key, item_key,
-                     marker, tag_set)
+from .models import (CLARIFICATION_TAG, DRAFT_TAG, NON_ISSUE_TAGS, PLAIN_PRIORITY_TAGS,
+                     PRIORITY_TAGS, PROPOSED_PRIORITY_TAGS, Item, check_tag, issue_key,
+                     item_key, marker, tag_set)
 
 
 class GitHubReadFailed(Exception):
@@ -23,6 +23,15 @@ class GitHubReadFailed(Exception):
 # Only these labels say anything the mirror mirrors. Any other label on the
 # tracker is somebody else's bookkeeping and would mint a junk tag.
 PRIORITY_LABELS = ("P0", "P1", "P2", "P3")
+
+# Three suffixes, all at the very END of a title so they annotate the name
+# instead of displacing it -- a German draft title runs to ~130 characters and
+# must stay readable. They are deliberately distinguishable at a glance:
+# what a task IS, what it POINTS AT, and which KIND of thing it points at.
+# Never `#12`: a `#` would create a tag in the owner's account.
+ISSUE_SUFFIX = " [Issue -> %d]"            # a promoted tracker issue
+ISSUE_RELATED_SUFFIX = " [Issue Related -> %d]"    # an item about an issue
+DRAFT_RELATED_SUFFIX = " [Draft Related -> %s]"    # a clarification about a draft
 
 # Nothing in this module removes `#` itself. Every string reaching TickTick is
 # cleaned once, in models.sanitise(), which Item applies to its own title and
@@ -94,8 +103,8 @@ def issues_to_items(payload):
     The title is passed through exactly as GitHub returns it -- the issues are
     German and stay German. It carries no `#<number> ` prefix either: that was
     this mirror's own invention and it was creating tags in the owner's
-    account (see models.sanitise). The number lives in the sync marker and the
-    URL in the body, which is where it was always actually needed.
+    account (see models.sanitise). The number returns as a SUFFIX instead, so
+    it annotates the name rather than displacing it.
 
     The description is an excerpt of the issue body, so the task says what it
     is about without anything being opened. The marker comes last, because the
@@ -113,7 +122,8 @@ def issues_to_items(payload):
         if issue.get("url"):
             parts.append("Source: %s" % issue["url"])
         parts.append(marker(key))
-        items[key] = Item(key=key, title=issue["title"], body="\n".join(parts), tags=tags)
+        title = "%s%s" % (issue["title"], ISSUE_SUFFIX % issue["number"])
+        items[key] = Item(key=key, title=title, body="\n".join(parts), tags=tags)
     return items
 
 
@@ -229,6 +239,75 @@ def _check_tag_scope(item_id, tags, is_draft):
             % (item_id, ", ".join(sorted(check_tag(tag) for tag in tags))))
 
 
+def _link_suffix(item_id, raw, tags, is_draft, known):
+    """Which of the three suffixes this item earns, and whether it may.
+
+    A clarification about a draft names that draft by ID and the title is
+    looked up here. The alternative -- storing the title in both places --
+    would duplicate a long German string that drifts the moment the draft is
+    renamed, and a link showing a title the draft no longer has is worse than
+    no link at all, because it looks right.
+    """
+    related = raw.get("related")
+    related_draft = raw.get("related_draft")
+
+    if related is not None and related_draft is not None:
+        raise GitHubReadFailed(
+            "Item '%s' names both `related` and `related_draft`. They render two "
+            "different suffixes and an item has one name -- pick the one that says "
+            "what this actually hangs off." % item_id)
+
+    if is_draft and (related is not None or related_draft is not None):
+        raise GitHubReadFailed(
+            "Item '%s' is an issue draft (it names a `source`) and cannot point at "
+            "anything: a draft is the thing that gets pointed AT. Put the link on "
+            "the clarification instead." % item_id)
+
+    if related is not None:
+        if isinstance(related, bool) or not isinstance(related, int):
+            raise GitHubReadFailed(
+                "Item '%s' has `related = %r`; it must be an issue NUMBER."
+                % (item_id, related))
+        return ISSUE_RELATED_SUFFIX % related
+
+    if related_draft is not None:
+        if CLARIFICATION_TAG not in tags:
+            raise GitHubReadFailed(
+                "Item '%s' names `related_draft` but is not tagged Clarification. "
+                "Pointing at a draft is what a clarification does; anything else "
+                "belongs to itself." % item_id)
+        target = known.get(related_draft)
+        if target is None:
+            raise GitHubReadFailed(
+                "Item '%s' has `related_draft = '%s'`, but no item with that id "
+                "exists in this file. The link is by id precisely so a rename "
+                "cannot go unnoticed -- this is that check firing."
+                % (item_id, related_draft))
+        target_title, target_is_draft = target
+        if not target_is_draft:
+            raise GitHubReadFailed(
+                "Item '%s' has `related_draft = '%s'`, but that item is not an issue "
+                "draft (it names no `source`). A draft link must point at a draft."
+                % (item_id, related_draft))
+        return DRAFT_RELATED_SUFFIX % target_title
+
+    return ""
+
+
+def _known_items(payload):
+    """id -> (title, is_draft) for EVERY item in the file, whatever its status.
+
+    Deliberately including `done` ones: a clarification may outlive the draft
+    it hangs off, and resolving its link must not start aborting the whole run
+    the moment that draft is ticked off.
+    """
+    known = {}
+    for raw in payload["items"]:
+        if isinstance(raw, dict) and "id" in raw and "title" in raw:
+            known[raw["id"]] = (raw["title"], bool(raw.get("source")))
+    return known
+
+
 def toml_to_items(text):
     try:
         payload = tomllib.loads(text)
@@ -237,6 +316,7 @@ def toml_to_items(text):
 
     _check_shape(payload)
 
+    known = _known_items(payload)
     items = {}
     for raw in payload["items"]:
         status = raw.get("status", "open")
@@ -256,23 +336,16 @@ def toml_to_items(text):
         except ValueError as error:
             raise GitHubReadFailed("Item '%s': %s" % (item_id, error)) from error
 
-        _check_tag_scope(item_id, tags, is_draft=bool(raw.get("source")))
+        is_draft = bool(raw.get("source"))
+        _check_tag_scope(item_id, tags, is_draft=is_draft)
 
-        title = raw["title"]
-        related = raw.get("related")
-        if related is not None:
-            if isinstance(related, bool) or not isinstance(related, int):
-                raise GitHubReadFailed(
-                    "Item '%s' has `related = %r`; it must be an issue NUMBER."
-                    % (item_id, related))
-            # Last, and square-bracketed: an item's own name comes first, and
-            # a draft title can run to ~130 characters, so our annotation must
-            # not push it off the visible line. Never `#12` -- a `#` here
-            # would create a tag named `12` in the owner's account. Square
-            # brackets cannot be confused with the sync marker: that one
-            # requires a literal `sync:` and a key charset without spaces, and
-            # it lives in the body (see models.key_from_body and its tests).
-            title = "%s [Issue %d Related]" % (title, related)
+        # The suffix goes last: an item's own name comes first, and a draft
+        # title runs to ~130 characters, so the annotation must not push the
+        # name off the visible line. Square brackets cannot be confused with
+        # the sync marker -- that one requires a literal `sync:` and a key
+        # charset without spaces, and lives in the body (see
+        # models.key_from_body and its tests).
+        title = raw["title"] + _link_suffix(item_id, raw, tags, is_draft, known)
 
         # Description first, marker last: the app shows the opening lines, so
         # that is where the explanation belongs. `note` stays supported for
