@@ -7,7 +7,12 @@ recoverable when the local cache is gone.
 import re
 from dataclasses import dataclass
 
-MARKER_RE = re.compile(r"\[sync:([A-Za-z0-9._\-]+)\]")
+# Permitted characters in a key: alphanumeric, hyphen, dot, underscore.
+# This is the authoritative source; MARKER_RE is derived from it to ensure
+# they never drift apart. The round-trip property marker() -> key_from_body()
+# depends on every key being extractable by MARKER_RE.
+KEY_CHARSET = r"A-Za-z0-9._\-"
+MARKER_RE = re.compile(r"\[sync:([" + KEY_CHARSET + r"]+)\]")
 
 # TickTick priorities: 0 none, 1 low, 3 medium, 5 high.
 PRIORITIES = {"P0": 5, "P1": 5, "P2": 3, "P3": 1}
@@ -68,6 +73,20 @@ def issue_key(number):
 
 
 def item_key(item_id):
+    """Create an TickTick item key from its id, validating the character set.
+
+    Raises ValueError if the id contains any character not in KEY_CHARSET.
+    A bad character would break the marker round-trip, making recovered keys
+    unrecoverable on the next sync run. Raise rather than sanitize: two
+    different ids could slug to the same key and silently overwrite each
+    other's tasks, which is worse than the bug being fixed.
+    """
+    # Check that all characters in item_id are in the permitted set
+    if not re.match("^[" + KEY_CHARSET + "]+$", item_id):
+        raise ValueError(
+            f"Item id '{item_id}' contains characters not in permitted set "
+            f"(allowed: alphanumeric, hyphen, dot, underscore)"
+        )
     return "oi-%s" % item_id
 
 
