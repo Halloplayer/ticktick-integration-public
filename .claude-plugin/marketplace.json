@@ -1,0 +1,13 @@
+{
+  "name": "ticktick-sync",
+  "owner": {
+    "name": "Artem Zelenkov"
+  },
+  "plugins": [
+    {
+      "name": "ticktick-sync",
+      "source": "./"
+    }
+  ],
+  "description": "The TickTick mirror for globex-toolkit's open work. Register with 'claude plugin marketplace add Halloplayer/ticktick-sync' -- skill and engine then come from the cache, and this repo does not need to stay cloned."
+}
