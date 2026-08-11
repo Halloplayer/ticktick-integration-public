@@ -73,6 +73,63 @@ class ItemFileTest(unittest.TestCase):
             github.toml_to_items("[[items]\nid = broken")
 
 
+class FileShapeTest(unittest.TestCase):
+    """FINDING C1: a file that PARSES but is not shaped like an item list.
+
+    Twelve of the fifteen desired entries come from this file. Every case below
+    used to return zero items in perfect silence, and the collapse guard waves
+    that through because three is not zero -- so twelve real tasks in the
+    user's own list would be ticked off. The file must be required to *look*
+    like an item list before its contents are believed.
+    """
+
+    def test_a_singular_items_typo_raises_instead_of_dropping_everything(self):
+        """`[[item]]` instead of `[[items]]` -- valid TOML, wrong shape."""
+        text = 'version = 1\n\n[[item]]\nid = "a"\ntitle = "A"\n'
+        with self.assertRaises(github.GitHubReadFailed):
+            github.toml_to_items(text)
+
+    def test_a_file_truncated_to_its_header_raises(self):
+        """Half a file is not an empty list of items."""
+        with self.assertRaises(github.GitHubReadFailed):
+            github.toml_to_items("version = 1\n")
+
+    def test_an_empty_file_raises(self):
+        with self.assertRaises(github.GitHubReadFailed):
+            github.toml_to_items("")
+
+    def test_a_missing_version_raises(self):
+        text = '[[items]]\nid = "a"\ntitle = "A"\n'
+        with self.assertRaises(github.GitHubReadFailed):
+            github.toml_to_items(text)
+
+    def test_an_unknown_version_raises_rather_than_guessing_the_layout(self):
+        """A version we have never seen may mean anything at all."""
+        text = 'version = 99\n\n[[items]]\nid = "a"\ntitle = "A"\n'
+        with self.assertRaises(github.GitHubReadFailed):
+            github.toml_to_items(text)
+
+    def test_the_error_says_which_file_is_wrong(self):
+        with self.assertRaises(github.GitHubReadFailed) as caught:
+            github.toml_to_items("version = 1\n")
+
+        self.assertIn("open-items.toml", str(caught.exception))
+
+    def test_a_present_but_genuinely_empty_items_list_is_allowed(self):
+        """The one legitimate way to say "nothing is open".
+
+        This is the whole point of the distinction: refuse a file that does not
+        have the shape we expect, but believe a well-formed file that says
+        there is nothing.
+        """
+        self.assertEqual({}, github.toml_to_items("version = 1\nitems = []\n"))
+
+    def test_a_file_whose_items_are_all_done_is_allowed(self):
+        """Same thing by the other route -- shaped right, nothing open."""
+        text = 'version = 1\n\n[[items]]\nid = "a"\ntitle = "A"\nstatus = "done"\n'
+        self.assertEqual({}, github.toml_to_items(text))
+
+
 class ReadFailureTest(unittest.TestCase):
     def test_a_failing_gh_call_raises(self):
         def failing(*args, **kwargs):

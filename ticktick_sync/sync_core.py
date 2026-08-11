@@ -37,13 +37,29 @@ def run_sync(config, client, desired, state_path):
             client.update(project_id, action.task_id, action.item)
             counts["updated"] += 1
         elif isinstance(action, Reopen):
+            # A 200 here proves nothing. Measured 2026-08-11 against the live
+            # API (docs/api-notes.md section 7): POST /task/{id} on a DELETED id
+            # answers 200 with a complete, plausible-looking task object and
+            # stores none of it. The status code therefore cannot tell a real
+            # re-open from a write into the void, and catching TickTickError
+            # alone -- as this branch originally did -- would report reopened=1
+            # on every run forever while the item never came back and the dead
+            # id was never evicted. Ask the list instead of believing the reply.
             try:
                 client.update(project_id, action.task_id, action.item)
-                counts["reopened"] += 1
             except TickTickError:
-                # The remembered task is gone for good (deleted, not just
-                # completed). Falling back to a fresh one keeps the promise
-                # that the list shows what the repo says.
+                pass  # conclusive by itself, but the check below decides anyway
+            back = client.read_tasks(project_id).get(action.item.key)
+            if back is not None:
+                # It really is there. Point the cache at whatever id the list
+                # actually shows, so a stale entry heals instead of lingering.
+                ids[action.item.key] = back.task_id
+                counts["reopened"] += 1
+            else:
+                # The remembered task is gone for good (deleted, not merely
+                # completed). Falling back to a fresh one keeps the promise that
+                # the list shows what the repo says, and writing the new id over
+                # the old one is what finally evicts the dead one.
                 new_id = client.create(project_id, action.item)
                 if new_id:
                     ids[action.item.key] = new_id

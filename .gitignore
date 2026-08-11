@@ -2,3 +2,4 @@
 state.json
 sync.log
 __pycache__/
+sync.lock

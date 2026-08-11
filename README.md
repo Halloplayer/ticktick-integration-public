@@ -58,3 +58,36 @@ nothing was changed in TickTick -- the guard refuses to empty a non-empty
 list on what looks like a read failure rather than real completions. Follow
 the message's own instruction: if everything really is closed, delete
 `%LOCALAPPDATA%\ticktick-sync\state.json` and run again.
+
+The guard only catches a fall to **zero**, which is why two other refusals
+exist upstream of it. Between them they cover the partial collapse it cannot
+see:
+
+- **`GitHubReadFailed: open-items.toml has no ...`** -- the item list parsed
+  but is not shaped like an item list (a `[[item]]` typo, a truncated file, an
+  unknown `version`). Most of the mirrored work comes from that one file, so a
+  file that yields nothing would tick off everything it failed to mention while
+  the guard waved it through. To say that nothing is open, write `items = []`.
+- **`StateUnreadable: ... exists but could not be read`** -- `state.json` is
+  there but unreadable. Reporting the usual zero would disarm the collapse
+  guard for that run. A **missing** `state.json` remains a legitimate fresh
+  start; only an unreadable one refuses.
+
+## Only one run at a time
+
+The scheduled task cannot overlap itself, but running the skill by hand starts
+an independent process that can land mid-tick -- and two runs that both see an
+item as missing both create it. Because tasks are matched by the marker in
+their description, only one of the twins is ever seen again; the other stays in
+the list forever, never updated and never completed.
+
+A run therefore takes `%LOCALAPPDATA%\ticktick-sync\sync.lock` first. A run
+that finds it held logs
+
+```
+skipped: another run holds the lock (...). The next tick will reconcile.
+```
+
+and exits successfully. Nothing is lost: the next tick, five minutes later,
+reconciles everything. A lock left behind by a killed process is treated as
+abandoned after ten minutes and taken over, which is also logged (`stale`).

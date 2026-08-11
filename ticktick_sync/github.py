@@ -34,14 +34,58 @@ def issues_to_items(payload):
     return items
 
 
+SUPPORTED_ITEMS_VERSION = 1
+
+
+def _check_shape(payload):
+    """Refuse a file that does not LOOK like an item list.
+
+    Most of the mirrored work comes from this one file, and anything missing
+    from the desired set gets ticked off in the user's real list. The collapse
+    guard cannot help here: it only refuses a fall to zero, and a file that
+    yields nothing still leaves the GitHub issues standing, so the set merely
+    shrinks -- 15 to 3 -- and the guard waves it through.
+
+    Hence the distinction this function draws. "The file does not have the
+    shape we expect" -- no `items` key at all, no `version`, a `version` from
+    some other layout -- is a read failure and aborts the run. "The file says
+    there is nothing open" -- an `items` list that is present and genuinely
+    empty -- is a legitimate answer and passes straight through.
+    """
+    version = payload.get("version")
+    if version is None:
+        raise GitHubReadFailed(
+            "open-items.toml has no `version` key -- refusing to read it as an "
+            "item list. A truncated or half-written file looks exactly like "
+            "this, and believing it would complete every item it fails to "
+            "mention.")
+    if isinstance(version, bool) or version != SUPPORTED_ITEMS_VERSION:
+        raise GitHubReadFailed(
+            "open-items.toml says version %r, but this mirror only understands "
+            "version %d. A layout it does not know may mean anything at all, so "
+            "it stops rather than guess." % (version, SUPPORTED_ITEMS_VERSION))
+    if "items" not in payload:
+        raise GitHubReadFailed(
+            "open-items.toml has no `items` table -- a `[[item]]` typo or a "
+            "truncated file parses cleanly and yields nothing, which would tick "
+            "off every item it should have listed. Write `items = []` to say "
+            "that nothing is open.")
+    if not isinstance(payload["items"], list):
+        raise GitHubReadFailed(
+            "open-items.toml has an `items` key of type %s; it must be a list "
+            "of [[items]] tables." % type(payload["items"]).__name__)
+
+
 def toml_to_items(text):
     try:
         payload = tomllib.loads(text)
     except tomllib.TOMLDecodeError as error:
         raise GitHubReadFailed("open-items.toml is broken: %s" % error)
 
+    _check_shape(payload)
+
     items = {}
-    for raw in payload.get("items", []):
+    for raw in payload["items"]:
         status = raw.get("status", "open")
         if status not in {"open", "done"}:
             raise GitHubReadFailed("Item '%s' has invalid status '%s' (must be 'open' or 'done')" %

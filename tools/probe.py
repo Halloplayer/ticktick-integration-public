@@ -66,12 +66,113 @@ def call(method, path, payload=None):
 
 
 def record(name, payload):
+    """Write a fixture -- unless it would capture the user's own tasks.
+
+    The original probe ran against an EMPTY target list, so the recorded
+    `project_data*.json` fixtures are harmless. That list now holds the user's
+    real mirrored work, and a re-run would overwrite those committed fixtures
+    with their personal task titles. Refuse rather than leak.
+    """
+    if isinstance(payload, dict) and payload.get("tasks"):
+        print("  (not recording %s: the list holds %d real task(s))"
+              % (name, len(payload["tasks"])))
+        return
     FIXTURES.mkdir(parents=True, exist_ok=True)
     (FIXTURES / name).write_text(
         json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def task_in_list(pid, task_id):
+    """Fetch one task out of the project data, or None. Read-only."""
+    status, data = call("GET", "/project/%s/data" % pid)
+    if status != 200:
+        return None
+    for task in (data or {}).get("tasks", []):
+        if task.get("id") == task_id:
+            return task
+    return None
+
+
+def measure_dead_id_update(pid, dead_id):
+    """C2: does POST /task/{id} on a DELETED id actually fail?
+
+    `sync_core.run_sync` falls back from Reopen to Create by catching
+    TickTickError out of `client.update()`. If a dead id answers 200, that
+    fallback never fires: the run reports `reopened=1` forever, the item never
+    comes back, and the dead id is never evicted from state.json.
+
+    Called with an id that was created and deleted by this same probe -- it
+    never points at anything the user owns.
+    """
+    print("== C2: UPDATE ON A DELETED TASK ID ==")
+    print("dead id under test:", dead_id)
+    status, body = _do_call(BASE, "POST", "/task/%s" % dead_id, {
+        "id": dead_id, "projectId": pid, "title": "probe dead-id update",
+        "content": "[sync:probe-dead]", "priority": 3, "status": 0})
+    print("POST /task/<deleted id> -> %s %s" % (status, str(body)[:400]))
+    print("VERDICT: the fallback %s -- a dead id %s"
+          % ("WORKS as written" if status != 200 else "IS BROKEN",
+             "errors" if status != 200 else "answers 200"))
+    # A 200 would also mean the task got resurrected; make sure it did not.
+    resurrected = task_in_list(pid, dead_id)
+    print("is the dead id visible in the list afterwards?", resurrected is not None)
+    if resurrected is not None:
+        print("!! DELETE IT BY HAND: 'probe dead-id update' (id %s)" % dead_id)
+    return status
+
+
+def measure_whole_object_replace(pid):
+    """M6: is POST /task/{id} a whole-object REPLACE or a partial merge?
+
+    `Client.update()` sends only id/projectId/title/content/priority/status. If
+    the endpoint replaces, every field it omits -- a due date the user set by
+    hand, for instance -- is wiped on each sync. Creates its own throwaway task
+    with a due date, updates it exactly the way the adapter does, and looks.
+    """
+    print("== M6: IS UPDATE A WHOLE-OBJECT REPLACE? ==")
+    due = "2030-01-15T09:00:00+0000"
+    status, created = call("POST", "/task", {
+        "projectId": pid, "title": "probe task 2 (due date)",
+        "content": "[sync:probe-2]", "priority": 3,
+        "dueDate": due, "isAllDay": False, "timeZone": "Europe/Vienna"})
+    print("create with dueDate ->", status, json.dumps(created, indent=2,
+                                                       ensure_ascii=False)[:600])
+    if status != 200:
+        print("!! could not create the M6 probe task; measurement skipped")
+        return None
+    tid = created["id"]
+    print("dueDate as created:", (created or {}).get("dueDate"))
+
+    # Exactly the payload ticktick_sync/ticktick.py Client.update() sends.
+    status, updated = call("POST", "/task/%s" % tid, {
+        "id": tid, "projectId": pid, "title": "probe task 2 (due date) edited",
+        "content": "[sync:probe-2] edited", "priority": 5, "status": 0})
+    print("adapter-shaped update ->", status,
+          json.dumps(updated, indent=2, ensure_ascii=False)[:600])
+
+    after = task_in_list(pid, tid) or {}
+    survived = bool(after.get("dueDate"))
+    print("dueDate after the update:", after.get("dueDate"))
+    print("VERDICT: update is a %s -- the due date %s"
+          % ("PARTIAL MERGE" if survived else "WHOLE-OBJECT REPLACE",
+             "survived" if survived else "was wiped"))
+
+    print("-- cleaning up the M6 probe task --")
+    status, body = call("DELETE", "/project/%s/task/%s" % (pid, tid))
+    print("delete ->", status, body)
+    gone = task_in_list(pid, tid) is None
+    print("M6 probe task gone?", gone)
+    if not gone:
+        print("!! DELETE IT BY HAND: 'probe task 2 (due date) edited' (id %s)" % tid)
+    return survived
+
+
 if __name__ == "__main__":
+    # `--measure` runs only the C2/M6 measurements. The full probe re-walks
+    # create/update/complete/reopen, which is already recorded in
+    # docs/api-notes.md and needs no repeat against a list that is now live.
+    measure_only = "--measure" in sys.argv
+
     print("== list projects ==")
     status, projects = call("GET", "/project")
     print(status, json.dumps(projects, indent=2, ensure_ascii=False)[:1200])
@@ -93,6 +194,28 @@ if __name__ == "__main__":
             pid, match.get("name"), PROJECT_NAME))
     else:
         print("target project id confirmed: %s (%r)" % (pid, match.get("name")))
+
+    if measure_only:
+        print("== C2 setup: one throwaway task, created and then deleted ==")
+        status, throwaway = call("POST", "/task", {
+            "projectId": pid, "title": "probe dead-id task",
+            "content": "[sync:probe-dead]", "priority": 0})
+        print("create ->", status, json.dumps(throwaway, indent=2,
+                                              ensure_ascii=False)[:400])
+        if status != 200:
+            raise SystemExit("could not create the throwaway task")
+        dead = throwaway["id"]
+        status, body = call("DELETE", "/project/%s/task/%s" % (pid, dead))
+        print("delete ->", status, body)
+        if task_in_list(pid, dead) is not None:
+            print("!! DELETE IT BY HAND: 'probe dead-id task' (id %s)" % dead)
+            raise SystemExit(2)
+        print("deletion confirmed -- id %s is now dead" % dead)
+
+        measure_dead_id_update(pid, dead)
+        measure_whole_object_replace(pid)
+        print("== measurements complete, nothing left behind ==")
+        raise SystemExit(0)
 
     print("== project data (tasks in the list) ==")
     status, data = call("GET", "/project/%s/data" % pid)
@@ -152,5 +275,8 @@ if __name__ == "__main__":
     if not gone:
         print("!! DELETE IT BY HAND in the TickTick app: 'probe task edited' (id %s)" % tid)
         sys.exit(2)
+
+    measure_dead_id_update(pid, tid)
+    measure_whole_object_replace(pid)
 
     print("== all probes complete, probe task cleaned up ==")

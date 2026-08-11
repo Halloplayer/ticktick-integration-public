@@ -22,7 +22,17 @@ from ticktick_sync import models, state  # noqa: E402
 
 
 class FakeClient:
-    """Mirrors ticktick.Client's interface, no network."""
+    """Mirrors ticktick.Client's interface, no network.
+
+    `update` puts the task into the visible list, because that is what the live
+    API does: a `status: 0` write on a real id brings the task back into
+    `GET /project/{id}/data` (docs/api-notes.md section 4). This fake used to
+    accept the update and leave the list untouched -- which, measured, is the
+    behaviour of a DELETED id (section 7), not a re-openable one. Now that
+    `run_sync` checks the list instead of trusting the status code, the old
+    fake would have been describing a dead task and would rightly have sent the
+    run down the create path.
+    """
 
     def __init__(self, tasks=None):
         self.tasks = tasks or {}
@@ -34,12 +44,19 @@ class FakeClient:
     def read_tasks(self, project_id):
         return dict(self.tasks)
 
+    def _remember(self, task_id, item):
+        self.tasks[item.key] = models.Task(
+            key=item.key, task_id=task_id, title=item.title, body=item.body,
+            priority=item.priority)
+
     def create(self, project_id, item):
         self.created.append(item.key)
+        self._remember("new-" + item.key, item)
         return "new-" + item.key
 
     def update(self, project_id, task_id, item):
         self.updated.append(item.key)
+        self._remember(task_id, item)
 
     def complete(self, project_id, task_id):
         self.completed.append(task_id)
