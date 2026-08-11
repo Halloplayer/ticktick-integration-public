@@ -1,7 +1,7 @@
 {
   "name": "ticktick-sync",
   "description": "Mirrors the open work of globex/toolkit -- open GitHub issues plus the hand-kept open-items.toml -- into one TickTick list, one-way and idempotent. Ships the manual sync skill and the engine behind the 5-minute background task. Reads through the machine's existing gh auth and a personal TickTick token; needs no organisation-level access.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "author": {
     "name": "Artem Zelenkov"
   },
