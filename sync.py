@@ -68,8 +68,8 @@ def main(argv=None):
             print("sync: %s" % error, file=sys.stderr)
         return 1
 
-    line = "ok desired=%d created=%d updated=%d completed=%d" % (
-        len(desired), counts["created"], counts["updated"], counts["completed"])
+    line = "ok desired=%d created=%d updated=%d reopened=%d completed=%d" % (
+        len(desired), counts["created"], counts["updated"], counts["reopened"], counts["completed"])
     log(line)
     if not args.quiet:
         print("sync: " + line)
