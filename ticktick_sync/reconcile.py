@@ -42,3 +42,22 @@ def _differs(task, item):
             or task.body != item.body
             or task.priority != item.priority
             or task.completed)
+
+
+class CollapseRefused(Exception):
+    """Desired fell from non-empty to empty -- most likely a read failure."""
+
+
+def guard_collapse(desired, last_count):
+    """Empty is allowed. Collapsed is not.
+
+    Everything really can be closed at once, and then the empty set is right.
+    But a fall from non-empty to empty looks exactly like a failed read, and
+    the consequences are not equivalent: one costs a run, the other clears the
+    list. So when in doubt, do nothing.
+    """
+    if not desired and last_count > 0:
+        raise CollapseRefused(
+            "desired fell from %d to 0 -- that looks like a read failure, not "
+            "finished work. NOTHING was completed. If everything really is "
+            "closed, delete state.json and run again." % last_count)
