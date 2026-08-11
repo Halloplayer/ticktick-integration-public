@@ -1,4 +1,4 @@
-# skills/ticktick-sync/scripts/probe.py
+# skills/ticktick-integration/scripts/probe.py
 """Ask the live TickTick API what it actually supports, and record the answers.
 
 Nothing here is designed against a guessed endpoint. Throwaway in spirit but
@@ -29,7 +29,7 @@ PROJECT_NAME = "Work"
 
 
 def token():
-    env = pathlib.Path(os.environ["LOCALAPPDATA"]) / "ticktick-sync" / ".env"
+    env = pathlib.Path(os.environ["LOCALAPPDATA"]) / "ticktick-integration" / ".env"
     for line in env.read_text(encoding="utf-8").splitlines():
         # The user's file uses TICKTICK_API_KEY; accept both names rather than
         # making them re-edit a working secret to match our preference.

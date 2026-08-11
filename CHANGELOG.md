@@ -1,12 +1,42 @@
 # Changelog
 
-All notable changes to the `ticktick-sync` plugin are documented here.
+All notable changes to the `ticktick-integration` plugin are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 Effort markers (`[~Xh]`) are deliberately absent: this repo was built before the
 convention existed, and back-filling them would mean inventing numbers.
 
-## [Unreleased]
+## [4.0.0]
+
+### Changed
+- **Project renamed `ticktick-sync` -> `ticktick-integration`.** Every in-repo path, package
+  reference, cache path and generated artifact name follows: `.claude-plugin/plugin.json` and
+  `marketplace.json` (`name`, `repository`),
+  `skills/ticktick-sync/` -> `skills/ticktick-integration/`
+  (via `git mv`, so history follows), the data directory (`%LOCALAPPDATA%\ticktick-sync\` ->
+  `%LOCALAPPDATA%\ticktick-integration\`), the plugin cache path the generated launcher resolves
+  (`.claude/plugins/cache/ticktick-sync/ticktick-sync` ->
+  `.claude/plugins/cache/ticktick-integration/ticktick-integration`), the Scheduled Task name
+  (`TickTickSync` -> `TickTickIntegration`), and the dev-only override environment variables
+  (`TICKTICK_SYNC_DATA` -> `TICKTICK_INTEGRATION_DATA`, `TICKTICK_SYNC_WIKI_DIR` ->
+  `TICKTICK_INTEGRATION_WIKI_DIR`). Historical text is deliberately left alone: commit-message
+  quotes, the `docs/superpowers/` plan and spec amendments describing what the project was called
+  at the time, and the path/env-var names inside every changelog entry below this one, which
+  record what was actually true at each past release. `legacy/issue-descriptions.toml`'s comment
+  naming the pre-restructure `ticktick_sync/github.py` package path is left as-is too -- a
+  pre-existing stale reference in frozen migration-seed data, unrelated to this rename. The live
+  `%LOCALAPPDATA%\ticktick-sync\` installation itself is untouched; migrating it to the new data
+  directory is a manual, separate step. 316 tests pass, zero skips (unchanged in count from before
+  the rename -- this release adds no behaviour, only names).
+
+### Added
+- **A changelog version guard.** One test reads `version` out of `.claude-plugin/plugin.json` and
+  asserts `CHANGELOG.md` contains a matching `## [<version>]` heading, so a version bump without a
+  changelog entry now fails the suite instead of silently shipping undocumented. `CHANGELOG.md`
+  itself is now tracked in git for the first time -- it existed on disk but was never committed, so
+  it never actually shipped with the plugin despite being kept up to date by hand.
+
+## [3.1.0]
 
 ### Added
 - **Per-repository rendering language.** `config.toml` gained `language = "de"` or `"en"`. `"de"`,
@@ -27,6 +57,10 @@ convention existed, and back-filling them would mean inventing numbers.
   to remove, and a mixed-language body besides. `toml_to_items()` gained the same `language`
   parameter `issues_to_items()` already had; `title_en` now renders only in `"en"` and is simply
   left unrendered (not an error, not removed from the file) in `"de"`.
+
+## [3.0.0]
+
+### Fixed
 - **Conversational setup for a new repository**, driven by the rewritten
   `SKILL.md` plus `skills/ticktick-sync/scripts/setup.py`. It derives the slug
   from `git remote get-url origin` and has the user confirm it, reports whether
@@ -80,6 +114,10 @@ convention existed, and back-filling them would mean inventing numbers.
   seventeen real tasks. Guarded twice over so it cannot run again (the target's
   own config, and the renamed original), and it refuses loudly rather than
   leaving a half-migrated directory that discovery would silently ignore.
+
+## [2.1.0]
+
+### Changed
 - **The three title markers (`[Issue -> N]`, `[Issue Related -> N]`,
   `[Draft Related -> <title>]`) moved from a suffix to a prefix.** Same text,
   same brackets, same content -- only the position changed, on an explicit
@@ -93,6 +131,10 @@ convention existed, and back-filling them would mean inventing numbers.
   updated to match (the design doc keeps the old text visible under a new
   `**Amended**` note rather than rewriting it). 233 tests pass, zero skips.
   ⟨by:Halloplayer <halloplayer7@gmail.com>⟩
+
+## [2.0.0]
+
+### Changed
 - **Repository restructured to the standard plugin layout.** The engine modules
   moved from the `ticktick_sync/` package to `lib/`, and the entry point, the
   task installer, the probe and the tests moved under

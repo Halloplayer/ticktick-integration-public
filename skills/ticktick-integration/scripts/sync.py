@@ -49,13 +49,13 @@ def data_dir():
     leaving nothing anywhere to say why the mirror stopped. Any answer that
     lets the run reach its own error handling beats a KeyError here.
     """
-    override = os.environ.get("TICKTICK_SYNC_DATA")
+    override = os.environ.get("TICKTICK_INTEGRATION_DATA")
     if override:
         return pathlib.Path(override)
     local = os.environ.get("LOCALAPPDATA")
     if local:
-        return pathlib.Path(local) / "ticktick-sync"
-    return pathlib.Path.home() / ".ticktick-sync"
+        return pathlib.Path(local) / "ticktick-integration"
+    return pathlib.Path.home() / ".ticktick-integration"
 
 
 DATA = data_dir()
@@ -222,7 +222,7 @@ def select(jobs, wanted):
     if not chosen:
         raise ConfigError(
             "no repository %r is configured. Configured: %s. Run the "
-            "ticktick-sync skill inside a repository to set it up."
+            "ticktick-integration skill inside a repository to set it up."
             % (wanted, ", ".join(slug for slug, _ in jobs) or "(none)"))
     return chosen
 
@@ -268,7 +268,7 @@ def main(argv=None):
                 jobs = select(jobs, args.repo)
 
         if not jobs:
-            log("no repositories configured under %s -- run the ticktick-sync "
+            log("no repositories configured under %s -- run the ticktick-integration "
                 "skill inside a repository to set one up" % repos.repos_dir(DATA))
             if not args.quiet:
                 print("sync: no repositories configured")

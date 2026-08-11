@@ -65,12 +65,12 @@ class FakeClient:
 
 class LockTestBase(unittest.TestCase):
     """Everything points at a private temp dir; no network, no real `gh`, and
-    never the LIVE %LOCALAPPDATA%\\ticktick-sync."""
+    never the LIVE %LOCALAPPDATA%\\ticktick-integration."""
 
     def setUp(self):
         self.data_dir = tempfile.mkdtemp()
-        self._old_env = os.environ.get("TICKTICK_SYNC_DATA")
-        os.environ["TICKTICK_SYNC_DATA"] = self.data_dir
+        self._old_env = os.environ.get("TICKTICK_INTEGRATION_DATA")
+        os.environ["TICKTICK_INTEGRATION_DATA"] = self.data_dir
         importlib.reload(sync)
         self.config_path = os.path.join(self.data_dir, "config.toml")
         with open(self.config_path, "w", encoding="utf-8") as handle:
@@ -80,9 +80,9 @@ class LockTestBase(unittest.TestCase):
 
     def tearDown(self):
         if self._old_env is None:
-            os.environ.pop("TICKTICK_SYNC_DATA", None)
+            os.environ.pop("TICKTICK_INTEGRATION_DATA", None)
         else:
-            os.environ["TICKTICK_SYNC_DATA"] = self._old_env
+            os.environ["TICKTICK_INTEGRATION_DATA"] = self._old_env
         importlib.reload(sync)
 
     def run_main(self, client, desired=None, argv=None):

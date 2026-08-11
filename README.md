@@ -1,4 +1,4 @@
-# ticktick-sync
+# ticktick-integration
 
 Mirrors the open work of a GitHub repo (open issues plus a neutral item list,
 `open-items.toml`) into a TickTick list. One-way and strict: the repo is
@@ -19,20 +19,20 @@ grants no rights to anyone. Registering it needs a `gh` login that already has
 access to the repo:
 
 ```powershell
-claude plugin marketplace add Halloplayer/ticktick-sync
-claude plugin install ticktick-sync@ticktick-sync
+claude plugin marketplace add Halloplayer/ticktick-integration
+claude plugin install ticktick-integration@ticktick-integration
 ```
 
 Skill and engine then come from the plugin cache, and this repo does not need to
 stay cloned -- except to run the one-time setup below, which uses
-`skills/ticktick-sync/scripts/`.
+`skills/ticktick-integration/scripts/`.
 
 Changing the plugin rather than using it: see [`DEVELOPMENT.md`](DEVELOPMENT.md)
 and [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## One-time setup
 
-1. Put your TickTick API token in `%LOCALAPPDATA%\ticktick-sync\.env` as:
+1. Put your TickTick API token in `%LOCALAPPDATA%\ticktick-integration\.env` as:
    ```
    TICKTICK_API_KEY=<token>
    ```
@@ -41,12 +41,12 @@ and [`CONTRIBUTING.md`](CONTRIBUTING.md).
    account.
 2. Install the background job -- from the root of this repo:
    ```powershell
-   powershell -ExecutionPolicy Bypass -File .\skills\ticktick-sync\scripts\install_task.ps1
+   powershell -ExecutionPolicy Bypass -File .\skills\ticktick-integration\scripts\install_task.ps1
    ```
-   This registers a Windows Scheduled Task named `TickTickSync` that runs
+   This registers a Windows Scheduled Task named `TickTickIntegration` that runs
    every 5 minutes, on battery too, and catches up a run that was missed
    while the machine was asleep. The task's Execute is `pythonw.exe` running
-   a small Python launcher (`%LOCALAPPDATA%\ticktick-sync\launcher.pyw`)
+   a small Python launcher (`%LOCALAPPDATA%\ticktick-integration\launcher.pyw`)
    that resolves the newest cached plugin version at run time and hands off
    to its `sync.py`.
 
@@ -64,7 +64,7 @@ and [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Adding a repository
 
-Run the `ticktick-sync` skill inside the repository. It reads `git remote
+Run the `ticktick-integration` skill inside the repository. It reads `git remote
 get-url origin`, confirms the repo with you, shows your existing TickTick lists
 so you can pick one (and offers to create one only if you say so), writes an
 `open-items.toml` into the repo if it has none, and mirrors it from then on.
@@ -73,7 +73,7 @@ Everything the mirror knows lives in the data directory, keyed by the repo slug
 `<owner>__<repo>`:
 
 ```
-%LOCALAPPDATA%\ticktick-sync\
+%LOCALAPPDATA%\ticktick-integration\
   .env                              shared credential
   launcher.pyw                      shared
   sync.log                          shared; every line prefixed with the slug
@@ -115,7 +115,7 @@ to create the list by hand and re-run, which resolves it by name.
 ### Migrating the original single-repo installation
 
 The first run of the new layout on a machine that still has the old
-`%LOCALAPPDATA%\ticktick-sync\state.json` migrates itself: the state is copied
+`%LOCALAPPDATA%\ticktick-integration\state.json` migrates itself: the state is copied
 **verbatim** into `repos\globex__toolkit\`, along with the frozen
 `legacy/config.toml` and `legacy/issue-descriptions.toml` the plugin ships for
 exactly this purpose, and the original is renamed to
@@ -310,8 +310,8 @@ translation comes from.
 ## Running it by hand
 
 ```powershell
-$env:PYTHONIOENCODING="utf-8"; python skills\ticktick-sync\scripts\sync.py
-$env:PYTHONIOENCODING="utf-8"; python skills\ticktick-sync\scripts\sync.py --repo acme__widgets
+$env:PYTHONIOENCODING="utf-8"; python skills\ticktick-integration\scripts\sync.py
+$env:PYTHONIOENCODING="utf-8"; python skills\ticktick-integration\scripts\sync.py --repo acme__widgets
 ```
 
 With no `--repo` every configured repository is synced, one after another. The
@@ -326,12 +326,12 @@ failed, so the Scheduled Task's result code keeps meaning something. An unknown
 ## Reading sync.log
 
 Every run -- scheduled or by hand -- appends one line per repository to
-`%LOCALAPPDATA%\ticktick-sync\sync.log`, timestamped and prefixed with the repo
+`%LOCALAPPDATA%\ticktick-integration\sync.log`, timestamped and prefixed with the repo
 slug. A healthy line reads `<slug> ok ...`; a failed one reads `<slug> ERROR`
 and names the exception. Tail it to see the most recent runs:
 
 ```powershell
-Get-Content "$env:LOCALAPPDATA\ticktick-sync\sync.log" -Tail 10
+Get-Content "$env:LOCALAPPDATA\ticktick-integration\sync.log" -Tail 10
 ```
 
 Under `pythonw.exe` there is no console at all, so this log is the only place
@@ -350,7 +350,7 @@ closed, delete state.json and run again.
 nothing was changed in TickTick -- the guard refuses to empty a non-empty
 list on what looks like a read failure rather than real completions. Follow
 the message's own instruction: if everything really is closed, delete that
-repository's own `%LOCALAPPDATA%\ticktick-sync\repos\<slug>\state.json` and run
+repository's own `%LOCALAPPDATA%\ticktick-integration\repos\<slug>\state.json` and run
 again. Only that repository is affected; the others carry on.
 
 The guard only catches a fall to **zero**, which is why two other refusals
@@ -419,7 +419,7 @@ item as missing both create it. Because tasks are matched by the marker in
 their description, only one of the twins is ever seen again; the other stays in
 the list forever, never updated and never completed.
 
-A run therefore takes `%LOCALAPPDATA%\ticktick-sync\sync.lock` first. The lock
+A run therefore takes `%LOCALAPPDATA%\ticktick-integration\sync.lock` first. The lock
 is one for the whole process, not one per repository: a hand-run that syncs
 only `--repo x` still waits for a scheduled run that is halfway through `y`,
 which costs one skipped tick and removes any chance of two processes reaching

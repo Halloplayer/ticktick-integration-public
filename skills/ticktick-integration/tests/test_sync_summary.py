@@ -68,17 +68,17 @@ def item(key):
 
 
 class SummaryLineTest(unittest.TestCase):
-    """Points sync.DATA at a private temp dir via TICKTICK_SYNC_DATA, and
+    """Points sync.DATA at a private temp dir via TICKTICK_INTEGRATION_DATA, and
     stubs both the GitHub read and the TickTick client, so nothing here ever
     touches the network, the real `gh`, or the real
-    %LOCALAPPDATA%\\ticktick-sync\\.env / state.json -- that state is now
+    %LOCALAPPDATA%\\ticktick-integration\\.env / state.json -- that state is now
     LIVE and backs a real task list.
     """
 
     def setUp(self):
         self.data_dir = tempfile.mkdtemp()
-        self._old_env = os.environ.get("TICKTICK_SYNC_DATA")
-        os.environ["TICKTICK_SYNC_DATA"] = self.data_dir
+        self._old_env = os.environ.get("TICKTICK_INTEGRATION_DATA")
+        os.environ["TICKTICK_INTEGRATION_DATA"] = self.data_dir
         importlib.reload(sync)
         # token() only needs a syntactically valid credential; the TickTick
         # client itself is stubbed out below, so this value is never sent
@@ -96,9 +96,9 @@ class SummaryLineTest(unittest.TestCase):
 
     def tearDown(self):
         if self._old_env is None:
-            os.environ.pop("TICKTICK_SYNC_DATA", None)
+            os.environ.pop("TICKTICK_INTEGRATION_DATA", None)
         else:
-            os.environ["TICKTICK_SYNC_DATA"] = self._old_env
+            os.environ["TICKTICK_INTEGRATION_DATA"] = self._old_env
         importlib.reload(sync)
 
     def _run_main(self, desired, fake_client):

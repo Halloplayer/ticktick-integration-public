@@ -20,5 +20,5 @@ def newest_version_dir(root):
     root = pathlib.Path(root)
     versions = [p for p in root.iterdir() if p.is_dir()]
     if not versions:
-        raise SystemExit("no cached ticktick-sync version under %s" % root)
+        raise SystemExit("no cached ticktick-integration version under %s" % root)
     return max(versions, key=lambda p: tuple(int(n) for n in p.name.split(".") if n.isdigit()))

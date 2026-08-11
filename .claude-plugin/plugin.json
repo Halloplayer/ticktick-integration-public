@@ -1,10 +1,10 @@
 {
-  "name": "ticktick-sync",
+  "name": "ticktick-integration",
   "description": "Mirrors the open work of globex/toolkit -- open GitHub issues plus the hand-kept open-items.toml -- into one TickTick list, one-way and idempotent. Ships the manual sync skill and the engine behind the 5-minute background task. Reads through the machine's existing gh auth and a personal TickTick token; needs no organisation-level access.",
-  "version": "3.1.0",
+  "version": "4.0.0",
   "author": {
     "name": "Artem Zelenkov"
   },
-  "repository": "https://github.com/Halloplayer/ticktick-sync",
+  "repository": "https://github.com/Halloplayer/ticktick-integration",
   "license": "UNLICENSED"
 }

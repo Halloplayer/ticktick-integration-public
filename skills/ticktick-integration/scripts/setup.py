@@ -1,6 +1,6 @@
 """Setup CLI -- the deterministic half of what the skill does conversationally.
 
-The skill (`skills/ticktick-sync/SKILL.md`) asks the questions; this does the
+The skill (`skills/ticktick-integration/SKILL.md`) asks the questions; this does the
 parts that must not be improvised: parsing a git remote into a slug, listing
 the account's TickTick lists, creating one ONLY when told to in so many words,
 writing `repos/<slug>/config.toml`, and dropping a neutral `open-items.toml`

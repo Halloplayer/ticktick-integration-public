@@ -431,8 +431,8 @@ class SyncSummaryLineTest(unittest.TestCase):
         self.sync = sync
         self.data_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.data_dir, True)
-        self._old_env = os.environ.get("TICKTICK_SYNC_DATA")
-        os.environ["TICKTICK_SYNC_DATA"] = self.data_dir
+        self._old_env = os.environ.get("TICKTICK_INTEGRATION_DATA")
+        os.environ["TICKTICK_INTEGRATION_DATA"] = self.data_dir
         importlib.reload(sync)
         with open(os.path.join(self.data_dir, ".env"), "w", encoding="utf-8") as handle:
             handle.write("TICKTICK_TOKEN=fake-token-for-tests\n")
@@ -444,9 +444,9 @@ class SyncSummaryLineTest(unittest.TestCase):
 
     def tearDown(self):
         if self._old_env is None:
-            os.environ.pop("TICKTICK_SYNC_DATA", None)
+            os.environ.pop("TICKTICK_INTEGRATION_DATA", None)
         else:
-            os.environ["TICKTICK_SYNC_DATA"] = self._old_env
+            os.environ["TICKTICK_INTEGRATION_DATA"] = self._old_env
         importlib.reload(self.sync)
 
     class FakeClient:

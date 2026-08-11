@@ -1,5 +1,5 @@
 ---
-name: ticktick-sync
+name: ticktick-integration
 description: Mirrors a repository's open work -- its open GitHub issues plus the neutral item list open-items.toml -- into a TickTick list, one-way and strict, the repo always wins. Works for ANY repository: invoked inside one that is not set up yet, it asks what it needs, resolves or creates the TickTick list, drops an open-items.toml into the repo and mirrors it from then on alongside every other configured repo. Use this skill when the user says "ticktick sync", "update my list", "sync my ticktick", "open items to ticktick", "mirror this repo to ticktick", "set up ticktick for this repo", or when issues or the item list changed during a session and the state on their phone should be current.
 ---
 
@@ -11,7 +11,7 @@ job would not also run -- that is exactly the point.
 Each mirrored repository has its own directory in the data directory:
 
 ```
-%LOCALAPPDATA%\ticktick-sync\
+%LOCALAPPDATA%\ticktick-integration\
   .env                     shared credential -- one TickTick account
   launcher.pyw             shared
   sync.log                 shared; every line is prefixed with the repo slug
@@ -26,7 +26,7 @@ never mention TickTick or syncing.
 
 ```bash
 git remote get-url origin
-PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/ticktick-sync/scripts/setup.py" slug --remote "<the url>"
+PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/ticktick-integration/scripts/setup.py" slug --remote "<the url>"
 ```
 
 It prints `slug=`, `repo=` and `configured=`. **Confirm the repo with the user
@@ -42,14 +42,14 @@ would otherwise silently become the thing that gets mirrored.
 Show the user what already exists rather than making them recall a name:
 
 ```bash
-PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/ticktick-sync/scripts/setup.py" lists
+PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/ticktick-integration/scripts/setup.py" lists
 ```
 
 Ask which one to mirror into, or what a new one should be called. Then resolve
 it:
 
 ```bash
-PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/ticktick-sync/scripts/setup.py" ensure-list --name "<list name>"
+PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/ticktick-integration/scripts/setup.py" ensure-list --name "<list name>"
 ```
 
 - Exit 0 -- it prints `list_id=`; keep it for step 4.
@@ -71,7 +71,7 @@ which resolves an existing list by name.
 ## 3. Put the item list in the repository
 
 ```bash
-PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/ticktick-sync/scripts/setup.py" open-items --path .
+PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/ticktick-integration/scripts/setup.py" open-items --path .
 ```
 
 Creates `open-items.toml` if it is absent (`version = 1`, `items = []`), never
@@ -97,7 +97,7 @@ English tasks and is willing to maintain that cache.
 ## 5. Write the configuration and sync
 
 ```bash
-PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/ticktick-sync/scripts/setup.py" init \
+PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/ticktick-integration/scripts/setup.py" init \
   --repo "<owner/repo>" --list-id "<list id>" --list-name "<list name>" --language de
 ```
 
@@ -116,7 +116,7 @@ time, every time, so it cannot go stale mid-session. It is the same launcher
 the 5-minute background task uses (see `scripts/install_task.ps1`).
 
 ```bash
-PYTHONIOENCODING=utf-8 python "$LOCALAPPDATA/ticktick-sync/launcher.pyw" --repo <slug>
+PYTHONIOENCODING=utf-8 python "$LOCALAPPDATA/ticktick-integration/launcher.pyw" --repo <slug>
 ```
 
 Leave `--repo` off to sync every configured repository, which is what the
@@ -153,11 +153,11 @@ others.
   configured; most likely a typo in `--repo`.
 - **`gh ... failed`** -- check the GitHub login with `gh auth status`.
 - **`-> 401`** -- the TickTick token expired; regenerate it under Settings →
-  Account → API Token and put it in `%LOCALAPPDATA%\ticktick-sync\.env` as
+  Account → API Token and put it in `%LOCALAPPDATA%\ticktick-integration\.env` as
   `TICKTICK_API_KEY=<token>` (also accepts `TICKTICK_TOKEN=`). One credential
   serves every repository.
 - **`no .env in ...`** -- the data directory is missing. Create
-  `%LOCALAPPDATA%\ticktick-sync` and populate `.env` with `TICKTICK_API_KEY=<token>`.
+  `%LOCALAPPDATA%\ticktick-integration` and populate `.env` with `TICKTICK_API_KEY=<token>`.
   It deliberately does NOT live in the plugin folder, because a plugin update
   replaces that wholesale -- which is exactly why no configuration lives there
   either.

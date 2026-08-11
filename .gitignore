@@ -1,9 +1,9 @@
 # ============================================================
-# Mutable runtime state  (lives in %LOCALAPPDATA%\ticktick-sync, never here)
+# Mutable runtime state  (lives in %LOCALAPPDATA%\ticktick-integration, never here)
 # ============================================================
 # Belt and braces: the sync writes these into the data directory by design,
 # because a plugin update replaces the plugin folder wholesale. A stray copy
-# in the working tree means somebody ran with TICKTICK_SYNC_DATA pointed here
+# in the working tree means somebody ran with TICKTICK_INTEGRATION_DATA pointed here
 # -- their token and their task-id map must still not reach a commit.
 .env
 state.json

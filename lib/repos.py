@@ -8,7 +8,7 @@ away from being deleted. That was a latent bug before it was an obstacle.
 
 The layout that replaces it:
 
-    %LOCALAPPDATA%\\ticktick-sync\\
+    %LOCALAPPDATA%\\ticktick-integration\\
       .env                shared credential -- one TickTick account
       launcher.pyw        shared
       sync.log            shared, every line prefixed with the repo slug

@@ -1,4 +1,4 @@
-# Developing the ticktick-sync plugin
+# Developing the ticktick-integration plugin
 
 There are two ways to relate to this plugin — **do not confuse them**:
 
@@ -8,7 +8,7 @@ There are two ways to relate to this plugin — **do not confuse them**:
 - **Develop** it (change it): follow this file. You work in a **workspace
   checkout**, so your edits are live and committable.
 
-> **Never edit `~/.claude/plugins/cache/ticktick-sync/`.** The cache is
+> **Never edit `~/.claude/plugins/cache/ticktick-integration/`.** The cache is
 > version-scoped and gets **clobbered** on the next auto-update or re-install.
 > It is a consumer artifact, not a workspace.
 
@@ -17,7 +17,7 @@ There are two ways to relate to this plugin — **do not confuse them**:
 ```
 .claude-plugin/       plugin.json (the manifest) + marketplace.json
 lib/                  the engine — shared modules, flat, no package
-skills/ticktick-sync/
+skills/ticktick-integration/
   SKILL.md            the manual trigger
   scripts/            sync.py (entry point), setup.py, install_task.ps1, probe.py
   tests/              the suite + recorded API fixtures
@@ -27,7 +27,7 @@ legacy/               frozen single-tenant files — a one-shot migration seed o
 
 **No configuration ships with the code.** Which repositories are mirrored,
 which list each goes to, and every hand-written translation live per repository
-in `%LOCALAPPDATA%\ticktick-sync\repos\<owner>__<repo>\` — never here, because
+in `%LOCALAPPDATA%\ticktick-integration\repos\<owner>__<repo>\` — never here, because
 the version-scoped cache directory is replaced wholesale by an update and would
 take a user's own settings with it. `legacy/` is the sole exception and is not
 read at run time; see `legacy/README.md`.
@@ -39,7 +39,7 @@ does that insert itself; the tests do the same from `tests/`.
 ## Running it
 
 ```powershell
-$env:PYTHONIOENCODING="utf-8"; python skills\ticktick-sync\scripts\sync.py
+$env:PYTHONIOENCODING="utf-8"; python skills\ticktick-integration\scripts\sync.py
 ```
 
 Against the working copy this runs the code you just edited. Note that the
@@ -50,17 +50,17 @@ so that a plugin update mid-session cannot leave it on a stale version. See
 ## Tests
 
 ```bash
-PYTHONIOENCODING=utf-8 python -m unittest discover -s skills/ticktick-sync/tests -p "test_*.py"
+PYTHONIOENCODING=utf-8 python -m unittest discover -s skills/ticktick-integration/tests -p "test_*.py"
 ```
 
 Standard library only -- `unittest`, never `pytest`. Fully offline, well under a
 second. Both external edges (GitHub via `gh`, TickTick via HTTP) run against
-recorded fixtures in `skills/ticktick-sync/tests/fixtures/`.
+recorded fixtures in `skills/ticktick-integration/tests/fixtures/`.
 
 ## The background job
 
-`skills/ticktick-sync/scripts/install_task.ps1` registers the `TickTickSync`
-scheduled task and writes `%LOCALAPPDATA%\ticktick-sync\launcher.pyw`.
+`skills/ticktick-integration/scripts/install_task.ps1` registers the `TickTickIntegration`
+scheduled task and writes `%LOCALAPPDATA%\ticktick-integration\launcher.pyw`.
 
 Two things about that launcher are load-bearing:
 
@@ -73,7 +73,7 @@ Two things about that launcher are load-bearing:
   wrapper flashes a black window every five minutes. `pythonw.exe` allocates no
   console at all.
 
-The launcher targets `skills/ticktick-sync/scripts/sync.py` under the resolved
+The launcher targets `skills/ticktick-integration/scripts/sync.py` under the resolved
 version directory and raises `SystemExit`, naming the path, if it is not there --
 loudly, on purpose: this runs under `pythonw.exe` with no console and before
 `sync.py` has set up its own logging, so a silent failure on a path that moved
@@ -86,12 +86,12 @@ against.
 After changing `install_task.ps1`, re-run it to re-deploy the launcher:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\skills\ticktick-sync\scripts\install_task.ps1
+powershell -ExecutionPolicy Bypass -File .\skills\ticktick-integration\scripts\install_task.ps1
 ```
 
 ## Data lives apart from code
 
-Everything mutable is under `%LOCALAPPDATA%\ticktick-sync\`: `.env` (the token),
+Everything mutable is under `%LOCALAPPDATA%\ticktick-integration\`: `.env` (the token),
 `state.json` (the task-id map), `sync.log`, `sync.lock`. A plugin update
 replaces the plugin folder wholesale, so nothing mutable may live inside it.
-Override the location with `TICKTICK_SYNC_DATA` when testing.
+Override the location with `TICKTICK_INTEGRATION_DATA` when testing.

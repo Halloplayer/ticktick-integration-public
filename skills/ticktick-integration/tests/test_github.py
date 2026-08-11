@@ -596,15 +596,15 @@ def _wiki_dir():
     """Locate the globex-toolkit-dev working copy beside this repo.
 
     A hard-coded number of "..\" segments is exactly what broke this once
-    already: the tests moved a directory deeper (tests/ -> skills/ticktick-sync/
+    already: the tests moved a directory deeper (tests/ -> skills/ticktick-integration/
     tests/) and a fixed depth silently stopped resolving, so all five guards
     below fell back to "skipped" instead of failing loudly. Walk up from this
-    file to the ticktick-sync repo root (marked by .git) instead, so a future
-    move of the tests does not quietly disable these again. TICKTICK_SYNC_WIKI_DIR
+    file to the ticktick-integration repo root (marked by .git) instead, so a future
+    move of the tests does not quietly disable these again. TICKTICK_INTEGRATION_WIKI_DIR
     overrides the search outright, for a machine where the two repos are not
     simple workspace siblings.
     """
-    override = os.environ.get("TICKTICK_SYNC_WIKI_DIR")
+    override = os.environ.get("TICKTICK_INTEGRATION_WIKI_DIR")
     if override:
         return override
     directory = os.path.abspath(os.path.dirname(__file__))
@@ -627,7 +627,7 @@ LIVE_ITEMS = os.path.join(WIKI_DIR, "open-items.toml")
 
 @unittest.skipUnless(os.path.exists(LIVE_ITEMS),
                       "wiki working copy not found -- looked for %s (set "
-                      "TICKTICK_SYNC_WIKI_DIR to override)" % LIVE_ITEMS)
+                      "TICKTICK_INTEGRATION_WIKI_DIR to override)" % LIVE_ITEMS)
 class LiveItemFileTest(unittest.TestCase):
     """The real file, parsed by the real code.
 

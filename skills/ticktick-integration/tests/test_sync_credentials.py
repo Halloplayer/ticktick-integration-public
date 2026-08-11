@@ -19,21 +19,21 @@ import sync  # noqa: E402
 
 
 class ReloadedSyncTest(unittest.TestCase):
-    """Base: points sync.DATA at a private temp dir via TICKTICK_SYNC_DATA,
-    so nothing here ever touches the real %LOCALAPPDATA%\\ticktick-sync\\.env.
+    """Base: points sync.DATA at a private temp dir via TICKTICK_INTEGRATION_DATA,
+    so nothing here ever touches the real %LOCALAPPDATA%\\ticktick-integration\\.env.
     """
 
     def setUp(self):
         self.data_dir = tempfile.mkdtemp()
-        self._old_env = os.environ.get("TICKTICK_SYNC_DATA")
-        os.environ["TICKTICK_SYNC_DATA"] = self.data_dir
+        self._old_env = os.environ.get("TICKTICK_INTEGRATION_DATA")
+        os.environ["TICKTICK_INTEGRATION_DATA"] = self.data_dir
         importlib.reload(sync)
 
     def tearDown(self):
         if self._old_env is None:
-            os.environ.pop("TICKTICK_SYNC_DATA", None)
+            os.environ.pop("TICKTICK_INTEGRATION_DATA", None)
         else:
-            os.environ["TICKTICK_SYNC_DATA"] = self._old_env
+            os.environ["TICKTICK_INTEGRATION_DATA"] = self._old_env
         importlib.reload(sync)
 
 

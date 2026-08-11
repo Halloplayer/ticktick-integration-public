@@ -23,21 +23,21 @@ import sync  # noqa: E402
 
 
 class ReloadedSyncTest(unittest.TestCase):
-    """Points sync.DATA at a private temp dir via TICKTICK_SYNC_DATA, so
-    nothing here touches the real, LIVE %LOCALAPPDATA%\\ticktick-sync.
+    """Points sync.DATA at a private temp dir via TICKTICK_INTEGRATION_DATA, so
+    nothing here touches the real, LIVE %LOCALAPPDATA%\\ticktick-integration.
     """
 
     def setUp(self):
         self.data_dir = tempfile.mkdtemp()
-        self._old_env = os.environ.get("TICKTICK_SYNC_DATA")
-        os.environ["TICKTICK_SYNC_DATA"] = self.data_dir
+        self._old_env = os.environ.get("TICKTICK_INTEGRATION_DATA")
+        os.environ["TICKTICK_INTEGRATION_DATA"] = self.data_dir
         importlib.reload(sync)
 
     def tearDown(self):
         if self._old_env is None:
-            os.environ.pop("TICKTICK_SYNC_DATA", None)
+            os.environ.pop("TICKTICK_INTEGRATION_DATA", None)
         else:
-            os.environ["TICKTICK_SYNC_DATA"] = self._old_env
+            os.environ["TICKTICK_INTEGRATION_DATA"] = self._old_env
         importlib.reload(sync)
 
     def log_text(self):
@@ -71,7 +71,7 @@ class ConfigFailureIsLoggedTest(ReloadedSyncTest):
         """Directory creation moved inside the handler, so it must not be the
         thing that stops the log from being written."""
         fresh = os.path.join(self.data_dir, "not-created-yet")
-        os.environ["TICKTICK_SYNC_DATA"] = fresh
+        os.environ["TICKTICK_INTEGRATION_DATA"] = fresh
         importlib.reload(sync)
 
         exit_code = sync.main(["--quiet", "--config",
@@ -87,7 +87,7 @@ class ImportMustNotRaiseTest(unittest.TestCase):
 
     def setUp(self):
         self._saved = {name: os.environ.get(name)
-                       for name in ("TICKTICK_SYNC_DATA", "LOCALAPPDATA")}
+                       for name in ("TICKTICK_INTEGRATION_DATA", "LOCALAPPDATA")}
 
     def tearDown(self):
         for name, value in self._saved.items():
@@ -98,7 +98,7 @@ class ImportMustNotRaiseTest(unittest.TestCase):
         importlib.reload(sync)
 
     def test_importing_without_localappdata_does_not_raise(self):
-        os.environ.pop("TICKTICK_SYNC_DATA", None)
+        os.environ.pop("TICKTICK_INTEGRATION_DATA", None)
         os.environ.pop("LOCALAPPDATA", None)
 
         importlib.reload(sync)  # must not raise
@@ -107,7 +107,7 @@ class ImportMustNotRaiseTest(unittest.TestCase):
 
     def test_the_explicit_override_still_wins(self):
         target = tempfile.mkdtemp()
-        os.environ["TICKTICK_SYNC_DATA"] = target
+        os.environ["TICKTICK_INTEGRATION_DATA"] = target
         os.environ.pop("LOCALAPPDATA", None)
 
         importlib.reload(sync)
