@@ -54,18 +54,19 @@ class IssueMappingTest(unittest.TestCase):
     def test_every_open_issue_becomes_one_item(self):
         self.assertEqual({"gh-12", "gh-11"}, set(github.issues_to_items(ISSUES)))
 
-    def test_an_issue_title_is_the_github_title_plus_its_issue_suffix(self):
+    def test_an_issue_title_is_its_issue_marker_plus_the_github_title(self):
         """The name itself is untouched -- German, verbatim, no `#12 ` prefix
-        (that prefix was this mirror's own invention and TickTick turned it
-        into a TAG). The number returns at the END, where it annotates the
-        name instead of displacing it."""
-        self.assertEqual("Pruefung der importierten Datensaetze [Issue -> 12]",
+        of the mirror's own invention (that one was this mirror's own
+        invention too, and TickTick turned it into a TAG; this marker is
+        square-bracketed and never collides with the sync marker -- see
+        models.key_from_body). The number now returns at the START, as a
+        marker ahead of the name."""
+        self.assertEqual("[Issue -> 12] Pruefung der importierten Datensaetze",
                          github.issues_to_items(ISSUES)["gh-12"].title)
 
-    def test_every_promoted_issue_carries_the_issue_suffix(self):
+    def test_every_promoted_issue_carries_the_issue_prefix(self):
         for key, item in github.issues_to_items(ISSUES).items():
-            self.assertTrue(item.title.endswith("]"), "%s: %r" % (key, item.title))
-            self.assertIn(" [Issue -> ", item.title)
+            self.assertTrue(item.title.startswith("[Issue -> "), "%s: %r" % (key, item.title))
 
     def test_the_body_carries_the_key_and_the_url(self):
         body = github.issues_to_items(ISSUES)["gh-12"].body
@@ -112,12 +113,12 @@ class IssueMappingTest(unittest.TestCase):
 
     def test_the_german_name_itself_is_passed_through_verbatim(self):
         """The owner reads these on their phone as GitHub wrote them. Nothing
-        here translates or trims an issue's name; only the suffix is added."""
-        self.assertEqual("Neues Werkzeug zur Berichterstellung [Issue -> 11]",
+        here translates or trims an issue's name; only the prefix is added."""
+        self.assertEqual("[Issue -> 11] Neues Werkzeug zur Berichterstellung",
                          github.issues_to_items(ISSUES)["gh-11"].title)
 
-    def test_an_issue_never_gets_the_RELATED_suffix(self):
-        """Three suffixes exist and they are not interchangeable. `Issue
+    def test_an_issue_never_gets_the_RELATED_prefix(self):
+        """Three prefixes exist and they are not interchangeable. `Issue
         Related` marks an ITEM that points at an issue; an issue IS the issue,
         so it takes the plain `Issue ->` form instead."""
         for item in github.issues_to_items(ISSUES).values():
@@ -133,6 +134,30 @@ class IssueMappingTest(unittest.TestCase):
 
     def test_an_issue_without_a_priority_label_gets_no_tags(self):
         self.assertEqual(frozenset(), github.issues_to_items(ISSUES)["gh-11"].tags)
+
+    def test_the_title_prefix_does_not_leak_into_the_bodys_translated_first_line(self):
+        """The `[Issue -> N] ` prefix and the title-translation first line
+        were built separately -- this is the seam between them. The body's
+        opening line comes from `_translated_title`, keyed off the issue's OWN
+        title (`issue.get("title")`), never off the mirrored Item's title,
+        which by the time it exists already carries the prefix. A regression
+        that fed the prefixed title into the translation path would put
+        `[Issue -> 21] ` at the top of the description too."""
+        import hashlib
+
+        german_title = "Ein deutscher Titel, der uebersetzt werden muss."
+        title_digest = hashlib.sha256(models.sanitise(german_title).encode("utf-8")).hexdigest()
+        empty_desc_digest = hashlib.sha256(b"").hexdigest()
+        issues = [{"number": 21, "title": german_title,
+                   "url": "https://example.invalid/21", "labels": [], "body": ""}]
+        translations = {21: (empty_desc_digest, "", title_digest, "An English title.")}
+
+        item = github.issues_to_items(issues, translations)["gh-21"]
+
+        self.assertEqual("[Issue -> 21] " + german_title, item.title)
+        self.assertTrue(item.body.startswith("An English title.\n\n"),
+                        "body starts: %r" % item.body[:60])
+        self.assertNotIn("[Issue -> 21]", item.body)
 
 
 class ExcerptTest(unittest.TestCase):
@@ -246,18 +271,19 @@ class ItemFileTest(unittest.TestCase):
         shared repo; a stray one must not abort an unattended run."""
         self.assertIn("oi-abgleich-modus-c", github.toml_to_items(ITEMS_TOML))
 
-    def test_related_appends_the_issue_related_suffix(self):
-        """Square brackets, capitalised, and LAST -- so a long German draft
-        title is not pushed off the visible line by our own annotation."""
-        self.assertEqual("Structured checked-record provenance field [Issue Related -> 12]",
+    def test_related_prepends_the_issue_related_prefix(self):
+        """Square brackets, capitalised, and FIRST -- the owner's explicit
+        choice: what the item points at is the first thing read, even for a
+        long German draft title."""
+        self.assertEqual("[Issue Related -> 12] Structured checked-record provenance field",
                          github.toml_to_items(ITEMS_TOML)["oi-datensatz-geprueft-feld"].title)
 
-    def test_the_related_marker_is_the_very_end_of_the_title(self):
+    def test_the_related_marker_is_the_very_start_of_the_title(self):
         self.assertTrue(
             github.toml_to_items(ITEMS_TOML)["oi-datensatz-geprueft-feld"].title
-            .endswith(" [Issue Related -> 12]"))
+            .startswith("[Issue Related -> 12] "))
 
-    def test_without_related_the_title_carries_no_suffix(self):
+    def test_without_related_the_title_carries_no_prefix(self):
         title = github.toml_to_items(ITEMS_TOML)["oi-abgleich-modus-c"].title
 
         self.assertNotIn("Related", title)
@@ -384,19 +410,20 @@ class DraftLinkTest(unittest.TestCase):
         return ('version = 1\n\n%s[[items]]\nid = "q"\ntitle = "A question?"\n'
                 'tags = %s\n%s\n' % (draft, tags, extra))
 
-    def test_the_suffix_carries_the_drafts_full_title(self):
+    def test_the_prefix_carries_the_drafts_full_title(self):
         """Asserted verbatim, German and all: a truncation or a translation
         must break the build rather than ship."""
         items = github.toml_to_items(self._toml('related_draft = "abgleich-modus-c"'))
 
-        self.assertEqual("A question? [Draft Related -> %s]" % GERMAN_DRAFT_TITLE,
+        self.assertEqual("[Draft Related -> %s] A question?" % GERMAN_DRAFT_TITLE,
                          items["oi-q"].title)
 
     def test_the_draft_title_is_not_truncated(self):
         items = github.toml_to_items(self._toml('related_draft = "abgleich-modus-c"'))
 
-        self.assertTrue(items["oi-q"].title.endswith("Bestand schliesst]"),
+        self.assertTrue(items["oi-q"].title.startswith("[Draft Related -> "),
                         items["oi-q"].title)
+        self.assertIn("Bestand schliesst] A question?", items["oi-q"].title)
 
     def test_an_unknown_related_draft_raises_and_names_it(self):
         with self.assertRaises(github.GitHubReadFailed) as caught:
@@ -666,8 +693,8 @@ class HashFreeTest(unittest.TestCase):
             self.assertNotIn("#", item.body, "issue %s body would create a tag" % key)
 
     def test_no_file_item_carries_a_hash_in_its_title_or_body(self):
-        """Covers an item WITH `related` set -- the suffix that used to read
-        `(#12 related)` and now reads ` [Issue Related -> 12]`."""
+        """Covers an item WITH `related` set -- the marker that used to read
+        `(#12 related)` and now reads `[Issue Related -> 12] ` as a prefix."""
         items = github.toml_to_items(ITEMS_TOML)
         self.assertIn("oi-datensatz-geprueft-feld", items, "the related-bearing item must be in scope")
         for key, item in items.items():

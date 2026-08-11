@@ -26,14 +26,15 @@ class GitHubReadFailed(Exception):
 # tracker is somebody else's bookkeeping and would mint a junk tag.
 PRIORITY_LABELS = ("P0", "P1", "P2", "P3")
 
-# Three suffixes, all at the very END of a title so they annotate the name
-# instead of displacing it -- a German draft title runs to ~130 characters and
-# must stay readable. They are deliberately distinguishable at a glance:
-# what a task IS, what it POINTS AT, and which KIND of thing it points at.
-# Never `#12`: a `#` would create a tag in the owner's account.
-ISSUE_SUFFIX = " [Issue -> %d]"            # a promoted tracker issue
-ISSUE_RELATED_SUFFIX = " [Issue Related -> %d]"    # an item about an issue
-DRAFT_RELATED_SUFFIX = " [Draft Related -> %s]"    # a clarification about a draft
+# Three prefixes, all at the very START of a title -- an explicit owner
+# decision (2026-08-11), even though the `Draft Related` form can run past 100
+# characters and will dominate the visible line on a phone: what a task IS,
+# what it POINTS AT and which KIND of thing it points at is meant to be the
+# first thing read, ahead of the name itself. Never `#12`: a `#` would create
+# a tag in the owner's account.
+ISSUE_PREFIX = "[Issue -> %d] "            # a promoted tracker issue
+ISSUE_RELATED_PREFIX = "[Issue Related -> %d] "    # an item about an issue
+DRAFT_RELATED_PREFIX = "[Draft Related -> %s] "    # a clarification about a draft
 
 # Nothing in this module removes `#` itself. Every string reaching TickTick is
 # cleaned once, in models.sanitise(), which Item applies to its own title and
@@ -195,10 +196,10 @@ def issues_to_items(payload, translations=None):
     """The issue's own name, its own priority label, nothing added.
 
     The title is passed through exactly as GitHub returns it -- the issues are
-    German and stay German. It carries no `#<number> ` prefix either: that was
-    this mirror's own invention and it was creating tags in the owner's
-    account (see models.sanitise). The number returns as a SUFFIX instead, so
-    it annotates the name rather than displacing it.
+    German and stay German. It carries no `#<number> ` prefix of the mirror's
+    own old invention (that one was creating tags in the owner's account, see
+    models.sanitise). The number returns as the `[Issue -> N] ` PREFIX
+    instead, ahead of the name -- an explicit owner decision, not a `#`.
 
     The description is an excerpt of the issue body, so the task says what it
     is about without anything being opened -- but a task's description must
@@ -213,9 +214,12 @@ def issues_to_items(payload, translations=None):
     translation exists for it (_translated_title), that translation opens the
     BODY as its own first line, ahead of the description, so a reader sees
     what the task is in English before anything else. The title used for
-    this is the issue's own, without the ISSUE_SUFFIX appended below: the
-    suffix annotates the mirrored task, it is not part of what GitHub called
-    the issue and must not be translated.
+    this is the issue's own, via `issue.get("title")` -- NOT the mirrored
+    Item's title built below, which by then carries the ISSUE_PREFIX. The
+    prefix annotates the mirrored task; it is not part of what GitHub called
+    the issue and must not be translated (see also
+    test_the_title_prefix_does_not_leak_into_the_bodys_translated_first_line
+    in test_github.py, which guards this seam).
     """
     translations = translations if translations is not None else {}
     items = {}
@@ -235,7 +239,7 @@ def issues_to_items(payload, translations=None):
         if issue.get("url"):
             parts.append("Source: %s" % issue["url"])
         parts.append(marker(key))
-        title = "%s%s" % (issue["title"], ISSUE_SUFFIX % issue["number"])
+        title = "%s%s" % (ISSUE_PREFIX % issue["number"], issue["title"])
         items[key] = Item(key=key, title=title, body="\n".join(parts), tags=tags,
                           untranslated=desc_untranslated or title_untranslated)
     return items
@@ -353,8 +357,8 @@ def _check_tag_scope(item_id, tags, is_draft):
             % (item_id, ", ".join(sorted(check_tag(tag) for tag in tags))))
 
 
-def _link_suffix(item_id, raw, tags, is_draft, known):
-    """Which of the three suffixes this item earns, and whether it may.
+def _link_prefix(item_id, raw, tags, is_draft, known):
+    """Which of the three prefixes this item earns, and whether it may.
 
     A clarification about a draft names that draft by ID and the title is
     looked up here. The alternative -- storing the title in both places --
@@ -382,7 +386,7 @@ def _link_suffix(item_id, raw, tags, is_draft, known):
             raise GitHubReadFailed(
                 "Item '%s' has `related = %r`; it must be an issue NUMBER."
                 % (item_id, related))
-        return ISSUE_RELATED_SUFFIX % related
+        return ISSUE_RELATED_PREFIX % related
 
     if related_draft is not None:
         if CLARIFICATION_TAG not in tags:
@@ -403,7 +407,7 @@ def _link_suffix(item_id, raw, tags, is_draft, known):
                 "Item '%s' has `related_draft = '%s'`, but that item is not an issue "
                 "draft (it names no `source`). A draft link must point at a draft."
                 % (item_id, related_draft))
-        return DRAFT_RELATED_SUFFIX % target_title
+        return DRAFT_RELATED_PREFIX % target_title
 
     return ""
 
@@ -469,13 +473,13 @@ def toml_to_items(text):
                 "item without one is already titled in English, and a translation "
                 "of it would say nothing." % item_id)
 
-        # The suffix goes last: an item's own name comes first, and a draft
-        # title runs to ~130 characters, so the annotation must not push the
-        # name off the visible line. Square brackets cannot be confused with
-        # the sync marker -- that one requires a literal `sync:` and a key
-        # charset without spaces, and lives in the body (see
-        # models.key_from_body and its tests).
-        title = raw["title"] + _link_suffix(item_id, raw, tags, is_draft, known)
+        # The prefix goes first -- an explicit owner decision (2026-08-11),
+        # even for the `Draft Related` form, which can run past 100 characters
+        # with a ~130-character German draft title behind it. Square brackets
+        # cannot be confused with the sync marker -- that one requires a
+        # literal `sync:` and a key charset without spaces, and lives in the
+        # body, never the title (see models.key_from_body and its tests).
+        title = _link_prefix(item_id, raw, tags, is_draft, known) + raw["title"]
 
         # The translation opens the body, ahead of the description, so a
         # reader sees the English title before anything else -- then a blank

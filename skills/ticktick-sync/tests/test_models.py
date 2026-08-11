@@ -186,22 +186,22 @@ class MarkerTest(unittest.TestCase):
 
         self.assertEqual("oi-a", models.key_from_body(body))
 
-    def test_a_related_title_suffix_is_not_mistaken_for_a_marker(self):
-        """Titles now end in ` [Issue Related -> 12]`, which is square-bracketed
-        like the sync marker itself. Written down as a test so nobody has to
-        re-reason about the collision later: the marker regex demands the
-        literal `sync:` prefix and a key charset with no spaces in it, so the
-        suffix cannot satisfy it -- and the marker lives in the body anyway,
-        never in the title.
+    def test_a_related_title_prefix_is_not_mistaken_for_a_marker(self):
+        """Titles now START with ` [Issue Related -> 12] `, which is
+        square-bracketed like the sync marker itself. Written down as a test
+        so nobody has to re-reason about the collision later: the marker
+        regex demands the literal `sync:` prefix and a key charset with no
+        spaces in it, so the title prefix cannot satisfy it -- and the marker
+        lives in the body anyway, never in the title.
         """
-        for suffix in ("Some item [Issue -> 12]",
-                       "Some item [Issue Related -> 12]",
-                       "Some item [Draft Related -> Ein langer deutscher Titel]"):
-            self.assertIsNone(models.key_from_body(suffix), suffix)
+        for prefix in ("[Issue -> 12] Some item",
+                       "[Issue Related -> 12] Some item",
+                       "[Draft Related -> Ein langer deutscher Titel] Some item"):
+            self.assertIsNone(models.key_from_body(prefix), prefix)
 
-    def test_a_suffix_shaped_line_beside_a_real_marker_does_not_win(self):
+    def test_a_prefix_shaped_line_beside_a_real_marker_does_not_win(self):
         """Belt and braces: both present, the real key comes back."""
-        body = "Some item [Draft Related -> Ein Titel]\n\nSource: x\n[sync:oi-a]"
+        body = "[Draft Related -> Ein Titel] Some item\n\nSource: x\n[sync:oi-a]"
 
         self.assertEqual("oi-a", models.key_from_body(body))
 

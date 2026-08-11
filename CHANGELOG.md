@@ -9,6 +9,19 @@ convention existed, and back-filling them would mean inventing numbers.
 ## [Unreleased]
 
 ### Changed
+- **The three title markers (`[Issue -> N]`, `[Issue Related -> N]`,
+  `[Draft Related -> <title>]`) moved from a suffix to a prefix.** Same text,
+  same brackets, same content -- only the position changed, on an explicit
+  owner decision, even for the `Draft Related` form, whose full German draft
+  title can push the combined line past 100 characters. `lib/github.py`
+  (`ISSUE_PREFIX`, `ISSUE_RELATED_PREFIX`, `DRAFT_RELATED_PREFIX`,
+  `_link_prefix`) and every position-asserting test in `test_github.py` and
+  `test_models.py` were updated in place rather than duplicated, so the suite
+  never holds two contradictory assertions about one behaviour. `README.md`
+  ("Title prefixes") and the design doc's superseded suffix reasoning were
+  updated to match (the design doc keeps the old text visible under a new
+  `**Amended**` note rather than rewriting it). 233 tests pass, zero skips.
+  ⟨by:Halloplayer <halloplayer7@gmail.com>⟩
 - **Repository restructured to the standard plugin layout.** The engine modules
   moved from the `ticktick_sync/` package to `lib/`, and the entry point, the
   task installer, the probe and the tests moved under

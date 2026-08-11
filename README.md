@@ -104,26 +104,27 @@ owner's own account, which only a human could clear, by hand, in the app. So
 every title and body passes through one sanitiser (`models.sanitise`) before
 anything is sent: `#12` becomes ` issue 12`, any other `#` is dropped. Write
 `moot via #12` in the file anyway -- what you write is what you read, the
-sanitiser does the rewriting for you. Issue and item titles never carry a
-number *prefix* either, for the same reason (see Title suffixes, next):
-crossreferences are appended, never prepended.
+sanitiser does the rewriting for you. A crossreference (`#12`) inside the text
+is rewritten in place, not moved to either end -- see Title prefixes, next,
+for the mirror's own `[Issue -> N]`-style markers, which are a different
+thing.
 
-## Title suffixes
+## Title prefixes
 
-A task's title ends with one of three suffixes -- what a task IS, what it
+A task's title starts with one of three prefixes -- what a task IS, what it
 POINTS AT, and which KIND of thing it points at, all visible at a glance on a
-phone, without opening it. Always appended, never prefixed, so a long name
-(a German draft title can run to ~130 characters) is not pushed off the
-visible line by its own annotation.
+phone, without opening it. Always prepended: an explicit owner decision, even
+for the `Draft Related` form, whose full German draft title can push the
+combined line past 100 characters.
 
-| Suffix | Appears on | Set by | Means |
+| Prefix | Appears on | Set by | Means |
 |---|---|---|---|
-| ` [Issue -> 12]` | every mirrored GitHub issue | (automatic) | this task mirrors GitHub issue #12 |
-| ` [Issue Related -> 12]` | any item in `open-items.toml` | `related = 12` | this item is related to GitHub issue #12 |
-| ` [Draft Related -> <full draft title>]` | an item tagged `Clarification` | `related_draft = "<draft item id>"` | this item is a clarification about the named draft |
+| `[Issue -> 12] ` | every mirrored GitHub issue | (automatic) | this task mirrors GitHub issue #12 |
+| `[Issue Related -> 12] ` | any item in `open-items.toml` | `related = 12` | this item is related to GitHub issue #12 |
+| `[Draft Related -> <full draft title>] ` | an item tagged `Clarification` | `related_draft = "<draft item id>"` | this item is a clarification about the named draft |
 
 `related_draft` is looked up by the draft's **item id**, not its title -- the
-title shown in the suffix is resolved from that id at render time, so a
+title shown in the prefix is resolved from that id at render time, so a
 renamed draft cannot leave a stale title sitting in a clarification's task.
 
 ## What a task says
@@ -175,8 +176,8 @@ tag table and the `open-items.toml` example above), an item may also carry:
 | `description` | see "What a task says" above -- the task's opening text |
 | `title_en` | an English translation of a draft's (German) `title`, shown as the body's opening line -- see "Issue descriptions AND titles are translated by hand" below. Valid only on an item that names a `source` (an issue draft); on anything else it raises, since that item is already titled in English |
 | `source_url` | a tap-through link, appended to the `Source:` line alongside `source` (`Source: <source> - <source_url>` when both are set) |
-| `related` | a GitHub issue **number** this item relates to; renders as the ` [Issue Related -> N]` suffix |
-| `related_draft` | the **item id** (not the title) of a draft this item -- always tagged `Clarification` -- is a clarification about; renders as the ` [Draft Related -> ...]` suffix, with the title resolved live |
+| `related` | a GitHub issue **number** this item relates to; renders as the `[Issue Related -> N] ` prefix |
+| `related_draft` | the **item id** (not the title) of a draft this item -- always tagged `Clarification` -- is a clarification about; renders as the `[Draft Related -> ...] ` prefix, with the title resolved live |
 
 An item may set `related` or `related_draft`, never both, and neither on a
 draft itself -- a draft is the thing that gets pointed *at*, not the thing
@@ -264,7 +265,7 @@ it.
 An issue's **title** stays German too (see "Naming" above), and its
 translation lives in the same `issue-descriptions.toml` entry, alongside the
 description: `title_sha256` (a hash of the sanitised title, WITHOUT the
-generated ` [Issue -> N]` suffix -- that suffix is never translated) and
+generated `[Issue -> N] ` prefix -- that prefix is never translated) and
 `title_en`. A matching hash opens the task's body with that translation, as
 its own first line ahead of the description; a mismatch gets the same
 `[untranslated] ` treatment as a stale description and counts toward the same
