@@ -37,10 +37,17 @@ def reconcile(desired, current, known_ids=None):
 
 
 def _differs(task, item):
-    """`completed` counts as a difference -- that IS the re-opening."""
+    """`completed` counts as a difference -- that IS the re-opening.
+
+    The tag comparison is case- and order-insensitive because both sides are
+    already normalised to a frozenset of lowercased names (models.tag_set).
+    Anything less would differ on every run -- TickTick stores tags lowercase
+    on create but echoes the sent case on update -- and rewrite all fifteen
+    tasks every five minutes, forever.
+    """
     return (task.title != item.title
             or task.body != item.body
-            or task.priority != item.priority
+            or task.tags != item.tags
             or task.completed)
 
 

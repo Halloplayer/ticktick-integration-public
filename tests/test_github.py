@@ -10,7 +10,7 @@ from ticktick_sync import github  # noqa: E402
 ISSUES = [
     {"number": 12, "title": "Pruefung der importierten Datensaetze",
      "url": "https://github.com/globex/toolkit/issues/12",
-     "labels": [{"name": "P2"}]},
+     "labels": [{"name": "P1"}, {"name": "enhancement"}]},
     {"number": 11, "title": "Neues Werkzeug zur Berichterstellung",
      "url": "https://github.com/globex/toolkit/issues/11",
      "labels": []},
@@ -21,10 +21,18 @@ version = 1
 
 [[items]]
 id = "abgleich-modus-c"
-title = "abgleich: record list + priority"
+title = "abgleich: record list still missing"
 status = "open"
+tags = ["Draft", "Clarification"]
 priority = "P1"
 note = "Blocks review -> release."
+
+[[items]]
+id = "datensatz-geprueft-feld"
+title = "Structured checked-record provenance field"
+status = "open"
+tags = ["Clarification"]
+related = 12
 
 [[items]]
 id = "already-done"
@@ -37,8 +45,12 @@ class IssueMappingTest(unittest.TestCase):
     def test_every_open_issue_becomes_one_item(self):
         self.assertEqual({"gh-12", "gh-11"}, set(github.issues_to_items(ISSUES)))
 
-    def test_the_title_carries_the_issue_number(self):
-        self.assertEqual("#12 Pruefung der importierten Datensaetze",
+    def test_the_title_is_the_github_title_and_nothing_else(self):
+        """The `#12 ` prefix this mirror used to prepend was its own invention
+        -- and TickTick turns any `#token` in a task's text into a TAG, so it
+        was quietly minting tags named `12`, `11`, `14` in the owner's account.
+        The issue's name is the issue's name."""
+        self.assertEqual("Pruefung der importierten Datensaetze",
                          github.issues_to_items(ISSUES)["gh-12"].title)
 
     def test_the_body_carries_the_key_and_the_url(self):
@@ -47,11 +59,28 @@ class IssueMappingTest(unittest.TestCase):
         self.assertIn("[sync:gh-12]", body)
         self.assertIn("https://github.com/globex/toolkit/issues/12", body)
 
-    def test_a_priority_label_maps_to_a_ticktick_priority(self):
-        self.assertEqual(3, github.issues_to_items(ISSUES)["gh-12"].priority)
+    def test_the_german_title_is_passed_through_verbatim(self):
+        """The owner reads these on their phone as GitHub wrote them. Nothing
+        here translates, trims or decorates an issue title."""
+        self.assertEqual("Neues Werkzeug zur Berichterstellung",
+                         github.issues_to_items(ISSUES)["gh-11"].title)
 
-    def test_an_issue_without_a_priority_label_is_zero(self):
-        self.assertEqual(0, github.issues_to_items(ISSUES)["gh-11"].priority)
+    def test_an_issue_title_never_gets_a_related_suffix(self):
+        """`(issue N related)` marks an ITEM that points at an issue. An issue
+        IS the issue, so the suffix would be nonsense on it."""
+        for item in github.issues_to_items(ISSUES).values():
+            self.assertNotIn("related", item.title)
+
+    def test_a_priority_label_becomes_the_matching_tag(self):
+        self.assertEqual({"p1"}, set(github.issues_to_items(ISSUES)["gh-12"].tags))
+
+    def test_a_non_priority_label_does_not_become_a_tag(self):
+        """Only P0-P3 count; the tracker's other labels are none of our
+        business and would mint junk tags in the owner's account."""
+        self.assertNotIn("enhancement", github.issues_to_items(ISSUES)["gh-12"].tags)
+
+    def test_an_issue_without_a_priority_label_gets_no_tags(self):
+        self.assertEqual(frozenset(), github.issues_to_items(ISSUES)["gh-11"].tags)
 
 
 class ItemFileTest(unittest.TestCase):
@@ -66,11 +95,95 @@ class ItemFileTest(unittest.TestCase):
         self.assertIn("Blocks review -> release.",
                       github.toml_to_items(ITEMS_TOML)["oi-abgleich-modus-c"].body)
 
+    def test_the_tags_field_becomes_the_items_tags(self):
+        self.assertEqual({"draft", "clarification"},
+                         set(github.toml_to_items(ITEMS_TOML)["oi-abgleich-modus-c"].tags))
+
+    def test_an_item_without_tags_has_none(self):
+        text = 'version = 1\n\n[[items]]\nid = "a"\ntitle = "A"\n'
+        self.assertEqual(frozenset(), github.toml_to_items(text)["oi-a"].tags)
+
+    def test_a_leftover_priority_field_is_ignored_rather_than_fatal(self):
+        """The field is meaningless now, but the file is edited by hand in a
+        shared repo; a stray one must not abort an unattended run."""
+        self.assertIn("oi-abgleich-modus-c", github.toml_to_items(ITEMS_TOML))
+
+    def test_related_appends_the_issue_number_to_the_title(self):
+        """The word `issue`, then a bare number -- deliberately NOT `#12`, see
+        HashFreeTest below."""
+        self.assertEqual("Structured checked-record provenance field (issue 12 related)",
+                         github.toml_to_items(ITEMS_TOML)["oi-datensatz-geprueft-feld"].title)
+
+    def test_without_related_the_title_carries_no_suffix(self):
+        self.assertEqual("abgleich: record list still missing",
+                         github.toml_to_items(ITEMS_TOML)["oi-abgleich-modus-c"].title)
+
+    def test_a_tag_outside_the_permitted_set_raises_and_names_item_and_tag(self):
+        """The Open API cannot create, rename or delete a tag (POST /tag is a
+        500), so a typo would leave permanent litter in the owner's account
+        that only they can clear by hand. Refuse it at the source."""
+        bad = ('version = 1\n\n[[items]]\nid = "abgleich-modus-c"\n'
+               'title = "T"\ntags = ["Drfat"]\n')
+
+        with self.assertRaises(github.GitHubReadFailed) as caught:
+            github.toml_to_items(bad)
+
+        message = str(caught.exception)
+        self.assertIn("abgleich-modus-c", message, "Error must name the item")
+        self.assertIn("Drfat", message, "Error must name the offending tag")
+
     def test_malformed_toml_raises_rather_than_returning_empty(self):
         """Returning empty would mean "everything is done" -- the most dangerous
         possible response to a broken file."""
         with self.assertRaises(github.GitHubReadFailed):
             github.toml_to_items("[[items]\nid = broken")
+
+
+class HashFreeTest(unittest.TestCase):
+    """Ranked with the anti-churn test: a regression here pollutes a real
+    person's tag list.
+
+    Observed on the live account: TickTick makes a TAG out of any `#token` it
+    finds in a task's text. The mirror's own `#12 ` title prefix was therefore
+    minting tags named `12`, `11` and `14` in the owner's TickTick -- and the
+    Open API cannot delete a tag (POST /tag answers 500), so only the owner
+    can clear them, by hand, in the app. The single legitimate way to express
+    a tag is the structured `tags` field, which takes plain strings. Hence:
+    NO `#` in any string the mirror sends.
+    """
+
+    def test_no_issue_item_carries_a_hash_in_its_title_or_body(self):
+        for key, item in github.issues_to_items(ISSUES).items():
+            self.assertNotIn("#", item.title, "issue %s title would create a tag" % key)
+            self.assertNotIn("#", item.body, "issue %s body would create a tag" % key)
+
+    def test_no_file_item_carries_a_hash_in_its_title_or_body(self):
+        """Covers an item WITH `related` set -- the suffix that used to read
+        `(#12 related)` and now reads `(issue 12 related)`."""
+        items = github.toml_to_items(ITEMS_TOML)
+        self.assertIn("oi-datensatz-geprueft-feld", items, "the related-bearing item must be in scope")
+        for key, item in items.items():
+            self.assertNotIn("#", item.title, "item %s title would create a tag" % key)
+            self.assertNotIn("#", item.body, "item %s body would create a tag" % key)
+
+    def test_a_hash_in_an_item_title_raises_and_names_the_item(self):
+        text = 'version = 1\n\n[[items]]\nid = "abgleich-modus-c"\ntitle = "moot via #12"\n'
+
+        with self.assertRaises(github.GitHubReadFailed) as caught:
+            github.toml_to_items(text)
+
+        self.assertIn("abgleich-modus-c", str(caught.exception))
+
+    def test_a_hash_in_an_item_note_raises_and_names_the_item(self):
+        """The note lands in the task's content, which TickTick scans just the
+        same. `moot via #12` must be written `moot via issue 12`."""
+        text = ('version = 1\n\n[[items]]\nid = "abgleich-modus-c"\ntitle = "T"\n'
+                'note = "PO decision, or moot via #12"\n')
+
+        with self.assertRaises(github.GitHubReadFailed) as caught:
+            github.toml_to_items(text)
+
+        self.assertIn("abgleich-modus-c", str(caught.exception))
 
 
 class FileShapeTest(unittest.TestCase):

@@ -115,7 +115,7 @@ class ReopenClient:
 
     def _task(self, task_id, item):
         return models.Task(key=item.key, task_id=task_id, title=item.title,
-                           body=item.body, priority=item.priority)
+                           body=item.body, tags=item.tags)
 
     def create(self, project_id, item):
         self._minted += 1

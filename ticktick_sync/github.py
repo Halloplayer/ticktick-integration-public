@@ -10,11 +10,24 @@ import json
 import subprocess
 import tomllib
 
-from .models import Item, issue_key, item_key, marker, priority_of
+from .models import Item, check_tag, issue_key, item_key, marker, tag_set
 
 
 class GitHubReadFailed(Exception):
     """The desired state could not be read -- the run must abort."""
+
+
+# Only these labels say anything the mirror mirrors. Any other label on the
+# tracker is somebody else's bookkeeping and would mint a junk tag.
+PRIORITY_LABELS = ("P0", "P1", "P2", "P3")
+
+# TickTick makes a TAG out of any `#token` it finds in a task's text. The
+# mirror's old `#<number> ` title prefix was therefore quietly creating tags
+# named `12`, `11`, `14` in the owner's personal account -- and `POST /tag`
+# answers 500, so nothing here can delete them again; only the owner can, by
+# hand, in the app. The one legitimate way to express a tag is the structured
+# `tags` field. So: no `#` in anything the mirror sends.
+FORBIDDEN_IN_TEXT = "#"
 
 
 # Generous for a slow network, far below the 10-minute stale-lock threshold,
@@ -31,14 +44,21 @@ def load_config(path):
 
 
 def issues_to_items(payload):
+    """The issue's own name, its own priority label, nothing added.
+
+    The title is passed through exactly as GitHub returns it -- the issues are
+    German and stay German. It carries no `#<number> ` prefix either: that was
+    this mirror's own invention and it was creating tags in the owner's
+    account (see FORBIDDEN_IN_TEXT). The number lives in the sync marker and
+    the URL in the body, which is where it was always actually needed.
+    """
     items = {}
     for issue in payload:
         key = issue_key(issue["number"])
         labels = [label["name"] for label in issue.get("labels", [])]
-        priority = max([priority_of(label) for label in labels] or [0])
+        tags = tag_set(label for label in labels if label in PRIORITY_LABELS)
         body = "%s\n%s" % (marker(key), issue.get("url", ""))
-        items[key] = Item(key=key, title="#%d %s" % (issue["number"], issue["title"]),
-                          body=body.strip(), priority=priority)
+        items[key] = Item(key=key, title=issue["title"], body=body.strip(), tags=tags)
     return items
 
 
@@ -100,10 +120,28 @@ def toml_to_items(text):
                                  (raw.get("id", "?"), status))
         if status != "open":
             continue
+        item_id = raw.get("id", "?")
         try:
             key = item_key(raw["id"])
         except ValueError as error:
             raise GitHubReadFailed(str(error)) from error
+
+        try:
+            tags = tag_set(check_tag(tag) for tag in raw.get("tags", []))
+        except ValueError as error:
+            raise GitHubReadFailed("Item '%s': %s" % (item_id, error)) from error
+
+        title = raw["title"]
+        related = raw.get("related")
+        if related is not None:
+            if isinstance(related, bool) or not isinstance(related, int):
+                raise GitHubReadFailed(
+                    "Item '%s' has `related = %r`; it must be an issue NUMBER."
+                    % (item_id, related))
+            # `(issue 12 related)`, never `(#12 related)` -- a `#` here would
+            # create a tag named `12` in the owner's account.
+            title = "%s (issue %d related)" % (title, related)
+
         parts = [marker(key)]
         if raw.get("note"):
             parts.append(raw["note"])
@@ -111,8 +149,18 @@ def toml_to_items(text):
             parts.append("Source: %s" % raw["source"])
         if raw.get("owner"):
             parts.append("With: %s" % raw["owner"])
-        items[key] = Item(key=key, title=raw["title"], body="\n".join(parts),
-                          priority=priority_of(raw.get("priority")))
+        body = "\n".join(parts)
+
+        for what, text in (("title", title), ("body", body)):
+            if FORBIDDEN_IN_TEXT in text:
+                raise GitHubReadFailed(
+                    "Item '%s' has a '%s' in its %s. TickTick turns any such "
+                    "token into a TAG in the owner's account, and its API "
+                    "cannot delete one again -- write 'issue 12' instead of "
+                    "'%s12'. Tags belong in the `tags` field."
+                    % (item_id, FORBIDDEN_IN_TEXT, what, FORBIDDEN_IN_TEXT))
+
+        items[key] = Item(key=key, title=title, body=body, tags=tags)
     return items
 
 

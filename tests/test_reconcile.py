@@ -13,14 +13,15 @@ from ticktick_sync import models  # noqa: E402
 from ticktick_sync.reconcile import reconcile  # noqa: E402
 
 
-def item(key, title="Title", body="", priority=0):
-    return models.Item(key=key, title=title, body=body or models.marker(key), priority=priority)
+def item(key, title="Title", body="", tags=()):
+    return models.Item(key=key, title=title, body=body or models.marker(key),
+                       tags=models.tag_set(tags))
 
 
-def task(key, task_id="t1", title="Title", body=None, priority=0, completed=False):
+def task(key, task_id="t1", title="Title", body=None, tags=(), completed=False):
     return models.Task(key=key, task_id=task_id, title=title,
                        body=models.marker(key) if body is None else body,
-                       priority=priority, completed=completed)
+                       tags=models.tag_set(tags), completed=completed)
 
 
 class ReconcileTest(unittest.TestCase):
@@ -36,9 +37,9 @@ class ReconcileTest(unittest.TestCase):
 
         self.assertEqual([models.Update("t1", item("gh-1", title="new"))], actions)
 
-    def test_a_changed_priority_produces_an_update(self):
-        actions = reconcile({"gh-1": item("gh-1", priority=5)},
-                            {"gh-1": task("gh-1", priority=3)})
+    def test_a_changed_tag_produces_an_update(self):
+        actions = reconcile({"gh-1": item("gh-1", tags=["P1"])},
+                            {"gh-1": task("gh-1", tags=["P2"])})
 
         self.assertEqual(1, len(actions))
         self.assertIsInstance(actions[0], models.Update)
@@ -49,6 +50,45 @@ class ReconcileTest(unittest.TestCase):
     def test_an_already_completed_orphan_is_left_alone(self):
         """Otherwise every run would re-send the same completion forever."""
         self.assertEqual([], reconcile({}, {"gh-1": task("gh-1", completed=True)}))
+
+
+class TagChurnTest(unittest.TestCase):
+    """The most important test in the tag rework.
+
+    TickTick stores a task's tags as their LOWERCASE names: send `["P1"]` on
+    create and the account holds `["p1"]`. An update, by contrast, echoes back
+    whatever case it was sent. So a comparison that respected case -- or order,
+    since the API returns a list -- would find a difference on every single run
+    and rewrite all fifteen tasks every five minutes, forever. Comparing a
+    frozenset of lowercased names is what makes the mirror quiet.
+    """
+
+    def test_tags_differing_only_in_case_produce_no_action(self):
+        actions = reconcile({"oi-x": item("oi-x", tags=["Draft", "P1"])},
+                            {"oi-x": task("oi-x", tags=["draft", "p1"])})
+
+        self.assertEqual([], actions)
+
+    def test_tags_differing_only_in_order_produce_no_action(self):
+        actions = reconcile({"oi-x": item("oi-x", tags=["Draft", "P1"])},
+                            {"oi-x": task("oi-x", tags=["P1", "Draft"])})
+
+        self.assertEqual([], actions)
+
+    def test_tags_differing_in_case_and_order_at_once_produce_no_action(self):
+        """Exactly what the live list returns the run after a create."""
+        actions = reconcile({"oi-x": item("oi-x", tags=["Draft", "P1"])},
+                            {"oi-x": task("oi-x", tags=["p1", "draft"])})
+
+        self.assertEqual([], actions)
+
+    def test_a_genuinely_different_tag_set_still_produces_an_update(self):
+        """The quiet must not be bought by comparing nothing at all."""
+        actions = reconcile({"oi-x": item("oi-x", tags=["Draft", "P1"])},
+                            {"oi-x": task("oi-x", tags=["draft"])})
+
+        self.assertEqual(1, len(actions))
+        self.assertIsInstance(actions[0], models.Update)
 
 
 class RepoWinsTest(unittest.TestCase):

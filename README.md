@@ -22,6 +22,30 @@ always right, and TickTick is brought to match it, never the other way round.
    battery too, and it catches up a run that was missed while the machine was
    asleep.
 
+## Tags, and the one rule about `#`
+
+The mirror uses **tags**, never TickTick priorities. The vocabulary is closed to eight:
+
+| Tag | Means |
+|---|---|
+| `P0` `P1` `P2` `P3` | issue priority, taken from the issue's own label |
+| `Draft` | an issue draft |
+| `Task` | open work that is on the table but is not an issue |
+| `Bug` | something not on the table that is broken and needs fixing |
+| `Clarification` | the owner needs to answer something, or something awaits their approval |
+
+In `open-items.toml` an item sets them itself: `tags = ["Draft", "P1"]`. Anything
+outside the eight aborts the read and names the offender -- deliberately,
+because TickTick's API cannot delete a tag it creates, so a typo would leave
+litter only a human can clear from the app.
+
+**No `#` may appear in an item's title or note.** TickTick turns any `#token`
+in a task's text into a tag, so `moot via #12` would create a tag named `12`.
+Write `moot via issue 12` instead. An item that relates to an issue uses
+`related = 12`, which appends ` (issue 12 related)` to its title. A stray `#`
+fails the run rather than polluting the account. Issue titles are mirrored
+exactly as GitHub returns them, with no number prefix, for the same reason.
+
 ## Running it by hand
 
 ```powershell

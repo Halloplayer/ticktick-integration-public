@@ -49,14 +49,14 @@ class FakeClient:
         self.created.append(item.key)
         self.tasks[item.key] = models.Task(
             key=item.key, task_id="new-%d" % len(self.created), title=item.title,
-            body=item.body, priority=item.priority)
+            body=item.body, tags=item.tags)
         return "new-%d" % len(self.created)
 
     def update(self, project_id, task_id, item):
         self.updated.append(item.key)
         self.tasks[item.key] = models.Task(
             key=item.key, task_id=task_id, title=item.title, body=item.body,
-            priority=item.priority)
+            tags=item.tags)
 
     def complete(self, project_id, task_id):
         self.completed.append(task_id)

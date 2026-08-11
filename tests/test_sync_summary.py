@@ -47,7 +47,7 @@ class FakeClient:
     def _remember(self, task_id, item):
         self.tasks[item.key] = models.Task(
             key=item.key, task_id=task_id, title=item.title, body=item.body,
-            priority=item.priority)
+            tags=item.tags)
 
     def create(self, project_id, item):
         self.created.append(item.key)

@@ -6,7 +6,7 @@ import json
 import urllib.error
 import urllib.request
 
-from .models import Task, key_from_body
+from .models import Task, display_tags, key_from_body, tag_set
 
 BASE = "https://api.ticktick.com/open/v1"
 DONE = 2  # TickTick: status 2 == done
@@ -29,7 +29,7 @@ def tasks_from_payload(payload):
         if not key:
             continue
         tasks[key] = Task(key=key, task_id=raw["id"], title=raw.get("title", ""),
-                          body=body, priority=raw.get("priority", 0),
+                          body=body, tags=tag_set(raw.get("tags")),
                           completed=raw.get("status", 0) == DONE)
     return tasks
 
@@ -91,14 +91,14 @@ class Client:
         """
         created = self._calls("POST", "/task", {
             "projectId": project_id, "title": item.title,
-            "content": item.body, "priority": item.priority})
+            "content": item.body, "tags": display_tags(item.tags)})
         return (created or {}).get("id")
 
     def update(self, project_id, task_id, item):
         """`status: 0` also re-opens a completed task -- measured in Task 1."""
         self._calls("POST", "/task/%s" % task_id,
                     {"id": task_id, "projectId": project_id, "title": item.title,
-                     "content": item.body, "priority": item.priority, "status": 0})
+                     "content": item.body, "tags": display_tags(item.tags), "status": 0})
 
     def complete(self, project_id, task_id):
         self._calls("POST", "/project/%s/task/%s/complete" % (project_id, task_id))

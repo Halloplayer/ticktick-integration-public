@@ -65,20 +65,42 @@ class KeyTest(unittest.TestCase):
                            f"marker(item_key('{item_id}')) -> key_from_body() != item_key('{item_id}')")
 
 
-class PriorityTest(unittest.TestCase):
-    def test_p0_and_p1_are_high(self):
-        self.assertEqual(5, models.priority_of("P0"))
-        self.assertEqual(5, models.priority_of("P1"))
+class TagTest(unittest.TestCase):
+    """Tags replaced priorities entirely; the vocabulary is closed."""
 
-    def test_p2_is_medium(self):
-        self.assertEqual(3, models.priority_of("P2"))
+    def test_the_permitted_vocabulary_is_exactly_the_agreed_eight(self):
+        self.assertEqual({"P0", "P1", "P2", "P3", "Draft", "Task", "Bug", "Clarification"},
+                         set(models.PERMITTED_TAGS))
 
-    def test_an_absent_priority_is_zero(self):
-        self.assertEqual(0, models.priority_of(None))
+    def test_a_permitted_tag_comes_back_in_its_canonical_spelling(self):
+        self.assertEqual("Draft", models.check_tag("draft"))
+        self.assertEqual("P1", models.check_tag("p1"))
 
-    def test_an_unknown_label_is_zero_rather_than_a_crash(self):
-        """A new label on the tracker must not halt a background run."""
-        self.assertEqual(0, models.priority_of("P7"))
+    def test_a_tag_outside_the_vocabulary_raises(self):
+        """A typo must fail loudly rather than quietly minting junk in the
+        owner's TickTick account -- the API cannot delete a tag afterwards."""
+        with self.assertRaises(ValueError) as caught:
+            models.check_tag("Drfat")
+
+        self.assertIn("Drfat", str(caught.exception))
+
+    def test_tag_set_lowercases_and_forgets_order(self):
+        self.assertEqual(models.tag_set(["Draft", "P1"]), models.tag_set(["p1", "draft"]))
+
+    def test_tag_set_yields_a_frozenset_so_dataclass_equality_just_works(self):
+        self.assertIsInstance(models.tag_set(["Draft"]), frozenset)
+
+    def test_display_tags_are_canonical_and_deterministically_ordered(self):
+        self.assertEqual(["P1", "Draft"], models.display_tags(models.tag_set(["draft", "p1"])))
+
+    def test_display_tags_pass_an_unknown_tag_through_rather_than_crashing(self):
+        """Tags read BACK from TickTick are whatever the account holds; a hand-
+        added one must not halt an unattended run."""
+        self.assertEqual(["whatever"], models.display_tags(frozenset({"whatever"})))
+
+    def test_ticktick_priorities_are_gone_for_good(self):
+        self.assertFalse(hasattr(models, "priority_of"))
+        self.assertFalse(hasattr(models, "PRIORITIES"))
 
 
 class MarkerTest(unittest.TestCase):

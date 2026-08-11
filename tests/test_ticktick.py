@@ -5,19 +5,19 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-from ticktick_sync import ticktick  # noqa: E402
+from ticktick_sync import models, ticktick  # noqa: E402
 from ticktick_sync.models import marker  # noqa: E402
 
 PROJECT_DATA = {
     "project": {"id": "p1", "name": "globex-toolkit"},
     "tasks": [
-        {"id": "t1", "title": "#12 Retrieval verification",
+        {"id": "t1", "title": "Retrieval verification",
          "content": marker("gh-12") + "\nhttps://example.invalid/12",
-         "priority": 3, "status": 0},
+         "tags": ["p1", "draft"], "status": 0},
         {"id": "t2", "title": "Made by hand", "content": "no marker",
-         "priority": 0, "status": 0},
-        {"id": "t3", "title": "#11 Question generation",
-         "content": marker("gh-11"), "priority": 0, "status": 2},
+         "status": 0},
+        {"id": "t3", "title": "Question generation",
+         "content": marker("gh-11"), "status": 2},
     ],
 }
 
@@ -40,6 +40,71 @@ class ReadTasksTest(unittest.TestCase):
 
     def test_the_task_id_is_carried_through(self):
         self.assertEqual("t1", ticktick.tasks_from_payload(PROJECT_DATA)["gh-12"].task_id)
+
+    def test_the_tags_are_read_back_normalised(self):
+        """The account holds them lowercase; normalising on the way in is what
+        lets the comparison stay quiet."""
+        self.assertEqual(models.tag_set(["Draft", "P1"]),
+                         ticktick.tasks_from_payload(PROJECT_DATA)["gh-12"].tags)
+
+    def test_a_task_without_tags_has_an_empty_set_not_none(self):
+        self.assertEqual(frozenset(), ticktick.tasks_from_payload(PROJECT_DATA)["gh-11"].tags)
+
+
+class WritePayloadTest(unittest.TestCase):
+    """What actually goes over the wire.
+
+    TickTick priorities are not used at all any more, and `priority: 0` is not
+    the same as saying nothing: it would overwrite a priority the owner set by
+    hand on a mirrored task. Section 8 of docs/api-notes.md measured that an
+    omitted field is left alone -- so omitting is how we keep our hands off.
+    """
+
+    def _client_capturing(self, captured):
+        def calls(method, path, payload=None):
+            captured.append((method, path, payload))
+            return {"id": "new-1"}
+        return ticktick.Client("token", calls=calls)
+
+    def _item(self):
+        return models.Item(key="oi-x", title="An item", body=marker("oi-x"),
+                           tags=models.tag_set(["Draft", "P1"]))
+
+    def test_create_sends_no_priority_field_at_all(self):
+        captured = []
+        self._client_capturing(captured).create("p1", self._item())
+
+        self.assertNotIn("priority", captured[0][2])
+
+    def test_update_sends_no_priority_field_at_all(self):
+        captured = []
+        self._client_capturing(captured).update("p1", "t1", self._item())
+
+        self.assertNotIn("priority", captured[0][2])
+
+    def test_create_sends_the_tags_as_a_list_of_plain_strings(self):
+        captured = []
+        self._client_capturing(captured).create("p1", self._item())
+
+        self.assertEqual(["P1", "Draft"], captured[0][2]["tags"])
+
+    def test_update_sends_the_tags_too(self):
+        captured = []
+        self._client_capturing(captured).update("p1", "t1", self._item())
+
+        self.assertEqual(["P1", "Draft"], captured[0][2]["tags"])
+
+    def test_nothing_sent_over_the_wire_carries_a_hash(self):
+        """The second half of the no-`#` rule: even if an Item slipped through
+        carrying one, this is the last place to notice."""
+        captured = []
+        client = self._client_capturing(captured)
+        client.create("p1", self._item())
+        client.update("p1", "t1", self._item())
+
+        for _, _, payload in captured:
+            for value in payload.values():
+                self.assertNotIn("#", str(value))
 
 
 class ResolveListTest(unittest.TestCase):
