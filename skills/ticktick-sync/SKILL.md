@@ -1,6 +1,6 @@
 ---
 name: ticktick-sync
-description: Mirrors the open work of globex/toolkit (open GitHub issues plus the neutral item list open-items.toml) into the TickTick list "globex-toolkit". One-way, strict mirror -- the repo always wins. Use this skill when the user says "ticktick sync", "update my list", "sync my ticktick", "open items to ticktick", or when issues or the item list changed during a session and the state on their phone should be current.
+description: Mirrors the open work of globex/toolkit (open GitHub issues plus the neutral item list open-items.toml) into the TickTick list "🛡Work" (list id 6f1e2d3c4b5a69788796a5b4), using tags rather than TickTick priorities. One-way, strict mirror -- the repo always wins. Use this skill when the user says "ticktick sync", "update my list", "sync my ticktick", "open items to ticktick", or when issues or the item list changed during a session and the state on their phone should be current.
 ---
 
 # TickTick mirror
@@ -10,16 +10,24 @@ also run -- that is exactly the point.
 
 ## Run
 
-The path comes from `${CLAUDE_PLUGIN_ROOT}`, not from a working directory: the
-skill runs from the plugin cache, so no clone needs to exist anywhere.
+Do NOT run `sync.py` from `${CLAUDE_PLUGIN_ROOT}` directly. That path is bound
+once, when this session loaded the plugin -- after an in-session
+`claude plugin update` it still points at the OLD version, silently. Run the
+stable launcher instead: it resolves the newest cached plugin version at run
+time, every time, so it cannot go stale mid-session. It is the same launcher
+the 5-minute background task uses (see `tools/install_task.ps1`).
 
 ```bash
-PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/sync.py"
+PYTHONIOENCODING=utf-8 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$LOCALAPPDATA/ticktick-sync/run.ps1"
 ```
+
+Called with no arguments (unlike the background task, which passes
+`--quiet`), the launcher runs `python.exe` rather than `pythonw.exe`, so its
+output is visible here.
 
 ## Report the result
 
-The output is one line: `ok desired=N created=A updated=U completed=C`.
+The output is one line: `ok desired=N created=A updated=U reopened=R completed=C`.
 Report it in plain language -- what is new, what changed, what disappeared.
 
 ## When it fails
