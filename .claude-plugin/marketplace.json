@@ -9,5 +9,5 @@
       "source": "./"
     }
   ],
-  "description": "The TickTick mirror for globex-toolkit's open work. Register with 'claude plugin marketplace add Halloplayer/ticktick-integration' -- skill and engine then come from the cache, and this repo does not need to stay cloned."
+  "description": "The TickTick mirror for a GitHub repository's open work. Register with 'claude plugin marketplace add Halloplayer/ticktick-integration-public' -- skill and engine then come from the cache, and this repo does not need to stay cloned."
 }

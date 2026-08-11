@@ -78,11 +78,11 @@ Everything the mirror knows lives in the data directory, keyed by the repo slug
   launcher.pyw                      shared
   sync.log                          shared; every line prefixed with the slug
   repos\
-    globex__toolkit\
+    acme__widgets\
       config.toml                   repo, list_id, list_name, items_path, language
       state.json                    key -> task id, last_count
       issue-descriptions.toml       hand-written translations (only read if language = "en")
-    acme__widgets\
+    globex__toolkit\
       ...
 ```
 
@@ -111,19 +111,6 @@ Setup may create one -- once, only when you explicitly confirm it, through a
 separate function the sync path never calls. That API call is unverified
 (`POST /open/v1/tag` answers 500 on this API), so if it fails, setup tells you
 to create the list by hand and re-run, which resolves it by name.
-
-### Migrating the original single-repo installation
-
-The first run of the new layout on a machine that still has the old
-`%LOCALAPPDATA%\ticktick-integration\state.json` migrates itself: the state is copied
-**verbatim** into `repos\globex__toolkit\`, along with the frozen
-`legacy/config.toml` and `legacy/issue-descriptions.toml` the plugin ships for
-exactly this purpose, and the original is renamed to
-`state.json.pre-multi-repo` as a backup. It cannot run twice.
-
-Verbatim, not regenerated, because `state.json` carries `last_count` -- the
-number that ARMS the collapse guard. A fresh zero would disarm that guard for
-one run, on a live list.
 
 ## Choosing a language
 

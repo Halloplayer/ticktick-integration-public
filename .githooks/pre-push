@@ -11,15 +11,12 @@
 # Override (use sparingly): git push --no-verify
 
 # --- CURRENTLY DEACTIVATED --------------------------------------------------
-# Carried over deactivated from globex-toolkit, whose own main-protection block
-# is commented out while it is evaluated whether the PR gate is worth it for a
+# Left deactivated while it is evaluated whether the PR gate is worth it for a
 # one-maintainer repo. Direct push to master is therefore allowed (no
 # --no-verify needed). To activate, uncomment the block below.
 #
 # The protected branch here is `master`, not `main` -- activating this with
 # `main` would protect a branch this repo does not have, i.e. nothing at all.
-# Server-side branch protection is not an alternative: private repo on the
-# free plan -> HTTP 403.
 #
 # protected_branch="master"
 #

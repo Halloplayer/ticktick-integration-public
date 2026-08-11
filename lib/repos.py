@@ -1,12 +1,11 @@
-"""One directory per mirrored repository, and the one-shot migration into it.
+"""One directory per mirrored repository.
 
-The mirror was born single-tenant: one `config.toml` at the plugin root, one
-`state.json` in the data directory, one repository. The plugin root is the
-wrong home for either -- it is a version-scoped cache directory that a plugin
-update replaces WHOLESALE, so a user's own configuration was always one update
-away from being deleted. That was a latent bug before it was an obstacle.
+Nothing configuration-shaped belongs at the plugin root: that is a
+version-scoped cache directory which a plugin update replaces WHOLESALE, so a
+user's own configuration would always be one update away from being deleted.
+Everything mutable therefore lives in the data directory instead.
 
-The layout that replaces it:
+The layout:
 
     %LOCALAPPDATA%\\ticktick-integration\\
       .env                shared credential -- one TickTick account
@@ -23,23 +22,12 @@ constraint of this project is that a mirrored repo must not learn the mirror
 exists, and a config file naming TickTick would break exactly that. The single
 exception is `open-items.toml`, which is deliberately neutral.
 """
-import os
 import pathlib
 import re
-import shutil
 
 # `<owner>__<repo>`. A double underscore, because GitHub allows a single one in
 # both halves but not two in a row, so the pair still splits unambiguously.
 SEPARATOR = "__"
-
-# The one installation that predates all of this, migrated automatically.
-LEGACY_SLUG = "Work" + SEPARATOR + "globex-toolkit"
-
-# The legacy state.json is COPIED, not moved: it backs seventeen real tasks and
-# stays recoverable if anything about the new layout turns out wrong. It is
-# renamed afterwards so that no later run can mistake it for live state and
-# migrate a second time over a state that has moved on.
-BACKUP_SUFFIX = "pre-multi-repo"
 
 # Deliberately narrower than "anything without a slash". A slug becomes a
 # directory name under the data directory and comes from a git remote, which
@@ -56,15 +44,6 @@ _REMOTE = re.compile(r"[:/]([^/:]+)/([^/:]+?)(?:\.git)?/*$")
 
 class SlugError(Exception):
     """A repository slug that must not become a path."""
-
-
-class MigrationFailed(Exception):
-    """The legacy installation could not be lifted into the new layout.
-
-    Loud on purpose: the alternative is a repo directory that discovery
-    ignores, on a machine whose mirror then reports nothing wrong while
-    mirroring nothing at all.
-    """
 
 
 def check_slug(slug):
@@ -147,58 +126,3 @@ def discover(data_dir):
         if config.is_file():
             found.append((check_slug(entry.name), str(config)))
     return found
-
-
-def migrate_legacy(data_dir, seed_dir):
-    """Lift the single-repo installation into `repos/<LEGACY_SLUG>/`, once.
-
-    Returns the migrated slug, or None when there was nothing to do.
-
-    The trigger is a `state.json` sitting directly in the data directory --
-    the shape only the old layout ever produced. That file is the reason this
-    exists at all: it carries `last_count`, which ARMS the collapse guard.
-    Regenerating it would report a comfortable zero, and `guard_collapse`
-    refuses only a fall from non-zero -- so a lost `last_count` switches the
-    one safeguard against completing a live list off for exactly one run. It
-    is therefore copied byte for byte, never rebuilt.
-
-    Idempotent twice over: the copy is skipped if the target config already
-    exists, and the legacy file is renamed out of the way afterwards so the
-    trigger cannot fire again.
-    """
-    data = pathlib.Path(data_dir)
-    legacy_state = data / "state.json"
-    if not legacy_state.is_file():
-        return None
-
-    target = repo_dir(data, LEGACY_SLUG)
-    if (target / "config.toml").is_file():
-        # Already migrated (or set up by hand). Whatever is there now is live
-        # and newer than this; stamping a stale copy over it would reset the
-        # very count this function exists to preserve.
-        return None
-
-    seed = pathlib.Path(seed_dir)
-    if not (seed / "config.toml").is_file():
-        # Checked BEFORE anything is written or renamed. A repo directory
-        # holding a state.json but no config.toml is invisible to discover(),
-        # so half a migration is worse than none: the run would look healthy
-        # while mirroring nothing, with the legacy state already moved aside.
-        raise MigrationFailed(
-            "cannot migrate the single-repo installation: no config.toml in %s. "
-            "The legacy state in %s was left untouched." % (seed, data))
-
-    target.mkdir(parents=True, exist_ok=True)
-    for name in ("config.toml", "issue-descriptions.toml"):
-        source = seed / name
-        if source.is_file():
-            shutil.copyfile(str(source), str(target / name))
-    shutil.copyfile(str(legacy_state), str(target / "state.json"))
-
-    try:
-        os.replace(str(legacy_state), str(data / ("state.json." + BACKUP_SUFFIX)))
-    except OSError:
-        # The copy is what matters and it already succeeded; the target's
-        # config.toml alone keeps this from running twice.
-        pass
-    return LEGACY_SLUG

@@ -4,7 +4,7 @@
 Nothing here is designed against a guessed endpoint. Throwaway in spirit but
 committed, so the next person can re-run it when the API moves.
 
-This probe writes into the user's real "Work" list (id
+This probe writes into the user's real "shieldWork" list (id
 6f1e2d3c4b5a69788796a5b4), which already holds their own personal tasks. It
 creates exactly one throwaway task, exercises update/complete/reopen against
 it, and deletes it again at the end -- printing an unmissable warning if the

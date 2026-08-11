@@ -1,7 +1,6 @@
 """Tests for the GitHub adapter -- against recorded shapes, not the network."""
 import os
 import sys
-import tomllib
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
@@ -255,7 +254,7 @@ class ItemFileTest(unittest.TestCase):
     def test_the_source_sits_between_description_and_marker(self):
         body = github.toml_to_items(ITEMS_TOML)["oi-abgleich-modus-c"].body
 
-        self.assertLess(body.index("Blocks seal"), body.index("Source: ISSUE-20240115090000"))
+        self.assertLess(body.index("Blocks review"), body.index("Source: ISSUE-20240115090000"))
         self.assertLess(body.index("Source: ISSUE-20240115090000"), body.index("[sync:"))
 
     def test_the_tags_field_becomes_the_items_tags(self):
@@ -592,88 +591,6 @@ class TagScopeTest(unittest.TestCase):
         self.assertEqual(frozenset(), github.issues_to_items(ISSUES)["gh-11"].tags)
 
 
-def _wiki_dir():
-    """Locate the globex-toolkit-dev working copy beside this repo.
-
-    A hard-coded number of "..\" segments is exactly what broke this once
-    already: the tests moved a directory deeper (tests/ -> skills/sync/
-    tests/) and a fixed depth silently stopped resolving, so all five guards
-    below fell back to "skipped" instead of failing loudly. Walk up from this
-    file to the ticktick-integration repo root (marked by .git) instead, so a future
-    move of the tests does not quietly disable these again. TICKTICK_INTEGRATION_WIKI_DIR
-    overrides the search outright, for a machine where the two repos are not
-    simple workspace siblings.
-    """
-    override = os.environ.get("TICKTICK_INTEGRATION_WIKI_DIR")
-    if override:
-        return override
-    directory = os.path.abspath(os.path.dirname(__file__))
-    while True:
-        if os.path.isdir(os.path.join(directory, ".git")):
-            return os.path.join(os.path.dirname(directory), "globex-toolkit-dev")
-        parent = os.path.dirname(directory)
-        if parent == directory:
-            # Filesystem root reached without finding a repo root -- fall back
-            # to "beside wherever this file happens to live" so LIVE_ITEMS below
-            # still resolves to *some* path, and the skip reason names it.
-            here = os.path.abspath(os.path.dirname(__file__))
-            return os.path.join(os.path.dirname(here), "globex-toolkit-dev")
-        directory = parent
-
-
-WIKI_DIR = _wiki_dir()
-LIVE_ITEMS = os.path.join(WIKI_DIR, "open-items.toml")
-
-
-@unittest.skipUnless(os.path.exists(LIVE_ITEMS),
-                      "wiki working copy not found -- looked for %s (set "
-                      "TICKTICK_INTEGRATION_WIKI_DIR to override)" % LIVE_ITEMS)
-class LiveItemFileTest(unittest.TestCase):
-    """The real file, parsed by the real code.
-
-    A fixture copy would drift from the file that actually gets mirrored, so
-    this reads the working copy beside this repo and skips where there is
-    none. On the machine that runs the sync -- the one that matters -- it
-    fails the build rather than the 06:05 run.
-    """
-
-    def _items(self):
-        with open(LIVE_ITEMS, encoding="utf-8") as handle:
-            return github.toml_to_items(handle.read())
-
-    def test_every_live_item_satisfies_the_tag_scope_rule(self):
-        self.assertEqual(14, len(self._items()))
-
-    def test_no_live_item_carries_a_hash(self):
-        for key, item in self._items().items():
-            self.assertNotIn("#", item.title, key)
-            self.assertNotIn("#", item.body, key)
-
-    def test_every_live_item_carries_a_tappable_source(self):
-        for key, item in self._items().items():
-            self.assertIn("Source: ", item.body, key)
-            self.assertIn("https://github.com/", item.body, key)
-
-    def test_every_live_marker_round_trips(self):
-        """The ids are the sync keys; a broken one orphans a real task."""
-        for key, item in self._items().items():
-            self.assertEqual(key, models.key_from_body(item.body))
-
-    def test_every_live_draft_carries_a_title_en(self):
-        """Every open issue draft in the real file SHOULD have an English
-        translation of its (German) title -- so a newly added draft that
-        forgets one fails the build instead of shipping a German-only task."""
-        with open(LIVE_ITEMS, encoding="utf-8") as handle:
-            payload = tomllib.loads(handle.read())
-        drafts = [item for item in payload["items"]
-                 if item.get("source") and item.get("status", "open") == "open"]
-
-        self.assertEqual(7, len(drafts), "expected seven open issue drafts")
-        for item in drafts:
-            self.assertTrue(item.get("title_en"),
-                            "draft '%s' has no title_en" % item["id"])
-
-
 class HashFreeTest(unittest.TestCase):
     """Ranked with the anti-churn test: a regression here pollutes a real
     person's tag list.
@@ -985,3 +902,4 @@ class GhTimeoutTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -137,10 +137,10 @@ class SanitiseTest(unittest.TestCase):
         `owner/repo#10` is the repo-qualified reference style these issue
         bodies actually use, and the first version of this sanitiser -- which
         substituted `issue \\1` with no separator -- turned it into
-        `acme/widgetsissue 10` in the live desired set.
+        `globex-toolkitissue 10` in the live desired set.
         """
         self.assertEqual("globex/toolkit issue 10",
-                         models.sanitise("acme/widgets#10"))
+                         models.sanitise("globex/toolkit#10"))
 
     def test_several_attached_references_in_one_line_each_separate(self):
         self.assertEqual("a issue 1 b issue 2", models.sanitise("a#1 b#2"))

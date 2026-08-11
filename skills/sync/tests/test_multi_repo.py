@@ -249,27 +249,5 @@ class SingleRepoFlagTest(MultiRepoTestBase):
         self.assertEqual(1, self.run_main(["--quiet", "--repo", "..\\..\\windows"]))
 
 
-class MigrationOnFirstRunTest(MultiRepoTestBase):
-    """The live installation must keep working across the very first run of the
-    new layout, without anybody being asked to do anything."""
-
-    def test_the_legacy_layout_is_migrated_and_then_synced(self):
-        with open(os.path.join(self.data_dir, "state.json"), "w", encoding="utf-8") as handle:
-            handle.write('{"last_count": 17, "ids": {}}')
-
-        code = self.run_main()
-
-        self.assertEqual(0, code)
-        self.assertIn("globex__toolkit ok desired=", self.log_text())
-
-    def test_the_migration_itself_is_logged(self):
-        with open(os.path.join(self.data_dir, "state.json"), "w", encoding="utf-8") as handle:
-            handle.write('{"last_count": 17, "ids": {}}')
-
-        self.run_main()
-
-        self.assertIn("migrated", self.log_text())
-
-
 if __name__ == "__main__":
     unittest.main()

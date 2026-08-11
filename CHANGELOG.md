@@ -57,7 +57,7 @@ convention existed, and back-filling them would mean inventing numbers.
   `untranslated=N` in the summary line, because nothing is being translated. `"en"` is the mirror's
   original behaviour, unchanged. A config with no `language` key migrates automatically, once, the
   first time it loads: to `"en"` if its repo's `issue-descriptions.toml` already holds translations
-  (so the live `globex/toolkit` config, English today, cannot silently revert to German), to
+  (so a config that is English today cannot silently revert to German), to
   `"de"` otherwise -- the decision is written back into `config.toml` so it happens exactly once.
   `setup.py init` gained `--language` and the skill now asks which one the user wants.
 
@@ -116,17 +116,6 @@ convention existed, and back-filling them would mean inventing numbers.
   collapse guard, the marker rule, the twelve-tag vocabulary, the three title
   prefixes, the `#` sanitiser, hash-guarded translations, never touching
   unmarked tasks, and never creating a list. 295 tests pass, zero skips.
-- **The live single-repo installation migrates itself, once.** On the first run
-  under the new layout, a `state.json` still sitting in the data directory is
-  copied VERBATIM into `repos\globex__toolkit\` together with the seed
-  config and translation cache, and the original is renamed
-  `state.json.pre-multi-repo` as a backup. Verbatim, not regenerated, because
-  `state.json` carries `last_count` -- the number that ARMS the collapse guard,
-  and a fresh zero would disarm it for exactly one run, on a live list of
-  seventeen real tasks. Guarded twice over so it cannot run again (the target's
-  own config, and the renamed original), and it refuses loudly rather than
-  leaving a half-migrated directory that discovery would silently ignore.
-
 ## [2.1.0]
 
 ### Changed
@@ -151,7 +140,7 @@ convention existed, and back-filling them would mean inventing numbers.
   moved from the `ticktick_sync/` package to `lib/`, and the entry point, the
   task installer, the probe and the tests moved under
   `skills/ticktick-sync/{scripts,tests}/` -- one skill owning its own code, with
-  `lib/` for what it shares, exactly as `globex-toolkit` is laid out. Imports are
+  `lib/` for what it shares. Imports are
   flat `sys.path` inserts rather than an installed package (`lib/` carries no
   `__init__.py` -- nothing imports it as a package, so one would be dead
   weight), because the plugin runs straight out of the cache where nothing is
@@ -168,12 +157,11 @@ convention existed, and back-filling them would mean inventing numbers.
   `CONTRIBUTING.md` and `DEVELOPMENT.md` alongside the existing `README.md`,
   plus `.claude/settings.json` and the `.githooks/` bootstrap.
   ⟨by:Halloplayer <halloplayer7@gmail.com>⟩
-- The five live-file guard tests in `test_github.py` (`LiveItemFileTest`) locate
-  the `globex-toolkit-dev` working copy by walking up from the test file to this
-  repo's root instead of a fixed `"..", "..", "..", ".."` depth -- the fixed
-  depth is exactly what silently broke them when the tests moved a directory
-  deeper, leaving all five reporting a false "not on this machine" skip instead
-  of running. `TICKTICK_SYNC_WIKI_DIR` overrides the search, and the skip
+- The live-file guard tests in `test_github.py` locate the mirrored repository's
+  working copy by walking up from the test file to this repo's root instead of a
+  fixed `"..", "..", "..", ".."` depth -- the fixed depth is exactly what
+  silently broke them when the tests moved a directory deeper, leaving them
+  reporting a false "not on this machine" skip instead of running. The skip
   message now names the exact path it looked for.
   ⟨by:Halloplayer <halloplayer7@gmail.com>⟩
 
@@ -210,7 +198,7 @@ convention existed, and back-filling them would mean inventing numbers.
 ## [1.0.1]
 
 ### Fixed
-- Config points at the renamed list (`globex-toolkit`).
+- Config points at the renamed list.
   ⟨by:Halloplayer <halloplayer7@gmail.com>⟩
 
 ## [1.0.0]

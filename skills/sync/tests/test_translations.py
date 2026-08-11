@@ -15,7 +15,6 @@ longer does -- confidently, in the owner's own task list. The prefix and the
 count exist so that never happens quietly.
 """
 import hashlib
-import json
 import os
 import sys
 import unittest
@@ -24,20 +23,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "lib"))
 
 import github, models  # noqa: E402
-
-FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
-
-# The live translation cache of `globex/toolkit`, frozen as the
-# migration seed (see legacy/README.md). It used to sit at the plugin root --
-# which a plugin update replaces WHOLESALE, taking a user's hand-written
-# translations with it -- so on a migrated machine the cache actually read
-# lives in %LOCALAPPDATA%\ticktick-integration\repos\globex__toolkit\. This
-# reads the committed copy the migration hands over: the same bytes, and,
-# unlike a path in the data directory, present on every machine. A guard that
-# quietly skips itself is no guard.
-LIVE_TRANSLATIONS = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "legacy",
-    "issue-descriptions.toml")
 
 
 def _issue(number, body, title="T"):
@@ -135,56 +120,6 @@ class TitleCacheMissTest(unittest.TestCase):
                         "body starts: %r" % items["gh-9"].body[:100])
         self.assertNotIn("A stale English title.", items["gh-9"].body)
         self.assertTrue(items["gh-9"].untranslated)
-
-
-class GuardTest(unittest.TestCase):
-    """Issues 11, 12 and 14 are the three real, currently-open issues this
-    mirror translates by hand (see issue-descriptions.toml). This test reads
-    their real bodies from a committed fixture -- no `gh` call, no network --
-    and proves the cache is CURRENT: if somebody edits one of those issues
-    upstream without updating the cache, this test fails the build instead of
-    the mirror quietly showing German again.
-    """
-
-    TITLE_TRANSLATIONS = {
-        11: "A new question-generation tool — self-checking test questions "
-            "that expose as many coverage gaps as possible",
-        12: "Verification that imported records resolve — does the index "
-            "find the cited entries at all?",
-        14: "Draw the seam — knowledge base and storage adapter as separate "
-            "trees in the same repo",
-    }
-
-    def test_all_three_real_issues_resolve_to_a_cached_translation(self):
-        with open(os.path.join(FIXTURES, "wiki_issues_11_12_14.json"), encoding="utf-8") as handle:
-            issues = json.load(handle)
-        translations = github.load_translations(LIVE_TRANSLATIONS)
-
-        items = github.issues_to_items(issues, translations)
-
-        for number in (11, 12, 14):
-            key = "gh-%d" % number
-            self.assertIn(key, items)
-            self.assertFalse(
-                items[key].untranslated,
-                "issue %d fell back to German -- issue-descriptions.toml is stale "
-                "(the issue body changed upstream and needs re-translating)" % number)
-
-    def test_all_three_real_issue_titles_resolve_to_the_cached_translation(self):
-        """Read cold on a phone, the first line of the task must be the
-        English title -- not the German one this mirror is required to keep
-        as the task's own name."""
-        with open(os.path.join(FIXTURES, "wiki_issues_11_12_14.json"), encoding="utf-8") as handle:
-            issues = json.load(handle)
-        translations = github.load_translations(LIVE_TRANSLATIONS)
-
-        items = github.issues_to_items(issues, translations)
-
-        for number, title_en in self.TITLE_TRANSLATIONS.items():
-            key = "gh-%d" % number
-            self.assertTrue(
-                items[key].body.startswith(title_en + "\n\n"),
-                "issue %d body starts: %r" % (number, items[key].body[:120]))
 
 
 if __name__ == "__main__":

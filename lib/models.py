@@ -112,11 +112,11 @@ def sanitise(text):
     indented. Line structure survives -- bodies are built line by line.
 
     The replacement inserts a LEADING space. Without one, a reference attached
-    to the word before it collided with that word: `acme/widgets#10`
-    came out as `acme/widgetsissue 10`. That repo-qualified form is the style
-    these issue bodies actually use, so it was the common case, not an edge
-    one. The added space costs nothing where a space was already there -- the
-    collapse below removes the double again.
+    to the word before it collided with that word: `acme/widgets#10` came out
+    as `acme/widgetsissue 10`. That repo-qualified form is the style issue
+    bodies actually use, so it was the common case, not an edge one. The added
+    space costs nothing where a space was already there -- the collapse below
+    removes the double again.
 
     This is deliberately ONE function, called from Item.__post_init__ rather
     than from each mapper: a chokepoint that has to be remembered is not a

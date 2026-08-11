@@ -124,29 +124,29 @@ class WritePayloadTest(unittest.TestCase):
 
 
 class ResolveListTest(unittest.TestCase):
-    PROJECTS = [{"id": "p1", "name": "🛡Work"}, {"id": "p2", "name": "Private"}]
+    PROJECTS = [{"id": "p1", "name": "Work"}, {"id": "p2", "name": "Private"}]
 
     def _client(self, projects=None):
         return ticktick.Client("token",
                                calls=lambda *a, **k: self.PROJECTS if projects is None else projects)
 
     def test_an_id_that_exists_resolves_to_itself(self):
-        self.assertEqual("p1", self._client().resolve_list("🛡Work", list_id="p1"))
+        self.assertEqual("p1", self._client().resolve_list("Work", list_id="p1"))
 
     def test_an_id_whose_name_does_not_match_raises(self):
         """The name is the guard on the id. Mirroring 18 machine tasks into the
         wrong list of somebody's personal task manager must fail loudly."""
         with self.assertRaises(ticktick.TickTickError) as caught:
-            self._client().resolve_list("🛡Work", list_id="p2")
+            self._client().resolve_list("Work", list_id="p2")
 
         self.assertIn("p2", str(caught.exception))
 
     def test_an_unknown_id_raises(self):
         with self.assertRaises(ticktick.TickTickError):
-            self._client().resolve_list("🛡Work", list_id="nope")
+            self._client().resolve_list("Work", list_id="nope")
 
     def test_without_an_id_it_falls_back_to_the_name(self):
-        self.assertEqual("p1", self._client().resolve_list("🛡Work"))
+        self.assertEqual("p1", self._client().resolve_list("Work"))
 
     def test_an_unknown_name_raises_and_says_to_create_it(self):
         """The mirror NEVER creates a list -- otherwise a bug sprays lists into
@@ -154,7 +154,7 @@ class ResolveListTest(unittest.TestCase):
         client = self._client(projects=[{"id": "p2", "name": "Private"}])
 
         with self.assertRaises(ticktick.TickTickError) as caught:
-            client.resolve_list("🛡Work")
+            client.resolve_list("Work")
 
         self.assertIn("Work", str(caught.exception))
 

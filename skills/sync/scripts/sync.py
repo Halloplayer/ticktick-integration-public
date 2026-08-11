@@ -34,11 +34,6 @@ import repos  # noqa: E402
 import ticktick  # noqa: E402
 from sync_core import run_sync  # noqa: E402
 
-# The one-shot seed for the legacy single-repo installation: the config and the
-# hand-written translation cache that used to sit at the plugin root, kept here
-# only so the migration has something to copy. Nothing reads it at run time.
-SEED = ROOT / "legacy"
-
 
 def data_dir():
     """Where the mutable state lives -- resolved without ever raising.
@@ -253,16 +248,10 @@ def main(argv=None):
             return 0
 
         if args.config:
-            # The escape hatch: one named config, no discovery and no
-            # migration. Labelled by its own directory, so the log still says
-            # which mirror a line is about.
+            # The escape hatch: one named config, no discovery. Labelled by its
+            # own directory, so the log still says which mirror a line is about.
             jobs = [(pathlib.Path(args.config).parent.name, args.config)]
         else:
-            migrated = repos.migrate_legacy(DATA, SEED)
-            if migrated:
-                log("migrated the single-repo layout into repos/%s -- state.json "
-                    "copied verbatim, the original kept as state.json.%s"
-                    % (migrated, repos.BACKUP_SUFFIX))
             jobs = repos.discover(DATA)
             if args.repo:
                 jobs = select(jobs, args.repo)

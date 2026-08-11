@@ -218,11 +218,11 @@ def _migrate_language(config, path):
     the decision back into `path` so the inference happens exactly once.
 
     The rule that matters: an already-live English repo must never revert to
-    German by accident. `globex/toolkit` is configured in English
-    today and has a populated `issue-descriptions.toml` holding hand-written
-    translations -- if it silently picked up the new German default, every
-    one of those would go dark on the next run with no error at all, because
-    German is a perfectly legitimate configuration. So: a config with no
+    German by accident. A repo configured in English has a populated
+    `issue-descriptions.toml` holding hand-written translations -- if it
+    silently picked up the new German default, every one of those would go
+    dark on the next run with no error at all, because German is a perfectly
+    legitimate configuration. So: a config with no
     `language` key whose repo directory holds a non-empty
     `issue-descriptions.toml` migrates to "en"; one with no translations file
     (or none at all -- the normal state of a brand-new repo) migrates to the

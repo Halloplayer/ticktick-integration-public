@@ -38,11 +38,10 @@ by tests. Do not work around a firing guard by disabling it.
 PYTHONIOENCODING=utf-8 python -m unittest discover -s skills/sync/tests -p "test_*.py"
 ```
 
-Standard library only -- `unittest`, never `pytest`. All of them must pass before a push. They are offline -- the GitHub and TickTick
-edges run against recorded shapes, not the network -- so there is no excuse for
-skipping them. One class (`LiveItemFileTest`) reads the real `open-items.toml`
-from a `globex-toolkit-dev` checkout beside this repo and skips where there is
-none; on the machine that actually runs the sync it must not skip.
+Standard library only -- `unittest`, never `pytest`. All of them must pass
+before a push. They are offline -- the GitHub and TickTick edges run against
+recorded shapes, not the network -- so there is no excuse for skipping them,
+and nothing in the suite reaches for a checkout outside this repo.
 
 ## Commits
 
