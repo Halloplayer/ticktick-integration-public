@@ -18,9 +18,20 @@ always right, and TickTick is brought to match it, never the other way round.
    powershell -ExecutionPolicy Bypass -File C:\Users\you\workspace\ticktick-sync\tools\install_task.ps1
    ```
    This registers a Windows Scheduled Task named `TickTickSync` that runs
-   `sync.py` every 5 minutes via `pythonw.exe` -- no console window, on
-   battery too, and it catches up a run that was missed while the machine was
-   asleep.
+   every 5 minutes, on battery too, and catches up a run that was missed
+   while the machine was asleep. The task's Execute is `pythonw.exe` running
+   a small Python launcher (`%LOCALAPPDATA%\ticktick-sync\launcher.pyw`)
+   that resolves the newest cached plugin version at run time and hands off
+   to its `sync.py`.
+
+   It is `pythonw.exe` running that launcher directly -- deliberately not a
+   `powershell.exe` wrapper around it. `powershell.exe` allocates its
+   console window BEFORE any `-WindowStyle Hidden` flag takes effect, so a
+   PowerShell wrapper flashes a black window on screen for an instant on
+   every single run; at 5-minute intervals that is twelve flashes an hour,
+   hours on end. `pythonw.exe` never allocates a console at all, so there is
+   no window to flash regardless of any hiding flag. Do not "simplify" this
+   back to a PowerShell wrapper -- it would reintroduce exactly that.
 
 ## Tags, and the one rule about `#`
 

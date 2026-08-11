@@ -1,15 +1,26 @@
-"""Both triggers must resolve the plugin version through the SAME launcher.
+"""Tests for the scheduled-task installer.
 
-Before this fix the launcher hardcoded `--quiet`, which the scheduled task
-needs but a human running the skill by hand does not -- the skill wants to
-SEE the output. Hardcoding one flag for both triggers is exactly the kind of
-drift the launcher indirection exists to prevent (see the file's own header
-comment), so the launcher must forward whatever arguments it is given
-instead of deciding for its caller.
+The task used to run through powershell.exe: `-WindowStyle Hidden -File
+run.ps1`. powershell.exe allocates its console BEFORE -WindowStyle Hidden
+takes effect, so a black window flashed on the owner's screen every five
+minutes for hours -- "must not slow down or interrupt my normal work" is one
+of this project's fixed constraints, and a window blinking twelve times an
+hour violates it more than anything else could.
+
+The fix replaces the PowerShell wrapper with pythonw.exe running a small
+Python launcher (launcher.pyw) directly. pythonw.exe never allocates a
+console at all, so there is nothing to flash regardless of any
+-WindowStyle-like setting -- there is no window to hide in the first place.
 """
 import os
 import re
+import sys
+import tempfile
 import unittest
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+from ticktick_sync.launcher_support import newest_version_dir  # noqa: E402
 
 SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools", "install_task.ps1")
 
@@ -18,55 +29,95 @@ class InstallTaskScriptTest(unittest.TestCase):
     def setUp(self):
         with open(SCRIPT, encoding="utf-8") as handle:
             self.text = handle.read()
+
+
+class WritesLauncherNotRunPsTest(InstallTaskScriptTest):
+    def test_the_installer_writes_launcher_pyw(self):
+        self.assertRegex(self.text, r'Set-Content\s+-Path\s+"\$dataDir\\launcher\.pyw"',
+                          "the installer must write launcher.pyw into the data directory")
+
+    def test_the_installer_no_longer_writes_run_ps1(self):
+        self.assertNotIn("run.ps1", self.text,
+                          "run.ps1 generation is dead -- the launcher replaced it entirely, "
+                          "and no reference to it should remain in the installer")
+
+
+class RegisteredActionTest(InstallTaskScriptTest):
+    def test_the_execute_variable_points_at_pythonw(self):
+        match = re.search(r'\$pythonw\s*=\s*"([^"]+)"', self.text)
+        self.assertIsNotNone(match, "install_task.ps1 must define a $pythonw variable")
+        self.assertTrue(match.group(1).lower().endswith("pythonw.exe"))
+
+    def test_the_scheduled_task_action_executes_pythonw(self):
+        match = re.search(r"New-ScheduledTaskAction\s+-Execute\s+(\S+)", self.text)
+        self.assertIsNotNone(match, "install_task.ps1 must define the scheduled task action's -Execute")
+        self.assertEqual("$pythonw", match.group(1),
+                          "the registered Execute must be the pythonw.exe path, not powershell.exe")
+
+    def test_the_arguments_name_launcher_pyw_and_pass_quiet(self):
+        match = re.search(r'-Argument\s+"(.*)"\s*$', self.text, re.MULTILINE)
+        self.assertIsNotNone(match, "install_task.ps1 must define the scheduled task action's -Argument")
+        self.assertIn("launcher.pyw", match.group(1))
+        self.assertIn("--quiet", match.group(1))
+
+
+class NoPowershellExecutableTest(InstallTaskScriptTest):
+    def test_no_line_registers_powershell_exe_as_the_task_executable(self):
+        """The regression guard: this is the one that matters."""
+        for line in self.text.splitlines():
+            if "-Execute" in line:
+                self.assertNotRegex(
+                    line, r"powershell\.exe",
+                    "the scheduled task's executable must never be powershell.exe again -- "
+                    "that is exactly the console-before-hidden bug this fix exists to prevent")
+
+
+class VersionResolutionIsNumericTest(unittest.TestCase):
+    """The launcher's own resolution function, tested directly by import --
+    not by shelling out to pythonw.exe."""
+
+    def test_a_double_digit_minor_beats_a_single_digit_one_numerically(self):
+        with tempfile.TemporaryDirectory() as root:
+            for name in ("0.9.0", "0.10.0"):
+                os.mkdir(os.path.join(root, name))
+            newest = newest_version_dir(root)
+            self.assertEqual("0.10.0", os.path.basename(str(newest)),
+                              "0.10.0 must be selected over 0.9.0 -- numeric, not lexical, comparison")
+
+    def test_a_lexical_sort_would_have_picked_the_wrong_one(self):
+        # Sanity check on the fixture itself, proving the test is meaningful:
+        # a plain string sort puts "0.9.0" after "0.10.0".
+        self.assertEqual(sorted(["0.9.0", "0.10.0"])[-1], "0.9.0")
+
+    def test_an_empty_directory_raises_rather_than_silently_doing_nothing(self):
+        with tempfile.TemporaryDirectory() as root:
+            with self.assertRaises(SystemExit):
+                newest_version_dir(root)
+
+
+class LauncherPywCallsTheSharedResolutionFunctionTest(InstallTaskScriptTest):
+    def _launcher_body(self):
         match = re.search(r"\$launcher = @'\r?\n(.*?)\r?\n'@", self.text, re.DOTALL)
         self.assertIsNotNone(match, "install_task.ps1 must define $launcher as a here-string")
-        self.launcher_body = match.group(1)
+        return match.group(1)
 
+    def test_the_generated_launcher_imports_the_shared_resolution_function(self):
+        body = self._launcher_body()
+        self.assertIn("newest_version_dir", body,
+                       "the generated launcher must call the same resolution function that is "
+                       "unit-tested in ticktick_sync/launcher_support.py, not reimplement it")
 
-class LauncherPassesArgumentsThroughTest(InstallTaskScriptTest):
-    def test_the_launcher_forwards_its_own_arguments_to_sync_py(self):
-        self.assertIn("@args", self.launcher_body,
-                      "the launcher must splat its own arguments through to sync.py, "
-                      "not decide on its caller's behalf")
+    def test_the_generated_launcher_does_not_reimplement_the_numeric_parsing(self):
+        body = self._launcher_body()
+        self.assertNotIn("tuple(int(n) for n in", body,
+                          "the numeric-parsing logic must live in launcher_support.py only -- a "
+                          "second copy inside the generated file is exactly the kind of drift the "
+                          "extraction exists to prevent")
 
-    def test_the_sync_py_invocation_does_not_hardcode_quiet(self):
-        invocation = next(line for line in self.launcher_body.splitlines()
-                          if "sync.py" in line)
-        self.assertNotIn("--quiet", invocation,
-                         "the line invoking sync.py must not hardcode --quiet -- that is the "
-                         "bug: it made the skill's invocation indistinguishable from the "
-                         "scheduled task's. (--quiet may still appear elsewhere in the "
-                         "launcher, e.g. the branch that CHECKS for it.)")
-        self.assertIn("@args", invocation,
-                      "the sync.py invocation itself must forward @args")
-
-
-class LauncherPicksTheRightPythonTest(InstallTaskScriptTest):
-    def test_pythonw_is_only_used_when_quiet_was_requested(self):
-        self.assertIn("pythonw.exe", self.launcher_body)
-        self.assertIn('$args -contains "--quiet"', self.launcher_body,
-                      "pythonw.exe (no console at all) must be gated on --quiet being among "
-                      "the forwarded arguments, so a human's visible-output run never goes "
-                      "through it")
-
-    def test_python_exe_is_available_for_a_visible_run(self):
-        self.assertIn("python.exe", self.launcher_body,
-                      "a run with no --quiet (the skill, run by a human) needs an "
-                      "interpreter that actually has a console to print to")
-
-
-class ScheduledTaskStillPassesQuietTest(unittest.TestCase):
-    def setUp(self):
-        with open(SCRIPT, encoding="utf-8") as handle:
-            self.text = handle.read()
-
-    def test_the_scheduled_task_action_passes_quiet_to_the_launcher(self):
-        match = re.search(r'-Argument\s+"(.*)"\s*$', self.text, re.MULTILINE)
-        self.assertIsNotNone(match, "install_task.ps1 must define the scheduled task action's "
-                                    "-Argument string")
-        self.assertIn("--quiet", match.group(1),
-                      "the scheduled task must explicitly pass --quiet to run.ps1 now that "
-                      "the launcher no longer hardcodes it")
+    def test_the_installer_stages_launcher_support_alongside_the_launcher(self):
+        self.assertIn("launcher_support.py", self.text,
+                       "the installer must place launcher_support.py in the data directory so the "
+                       "generated launcher.pyw can import it at run time")
 
 
 if __name__ == "__main__":

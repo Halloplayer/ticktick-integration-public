@@ -18,12 +18,14 @@ time, every time, so it cannot go stale mid-session. It is the same launcher
 the 5-minute background task uses (see `tools/install_task.ps1`).
 
 ```bash
-PYTHONIOENCODING=utf-8 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$LOCALAPPDATA/ticktick-sync/run.ps1"
+PYTHONIOENCODING=utf-8 python "$LOCALAPPDATA/ticktick-sync/launcher.pyw"
 ```
 
-Called with no arguments (unlike the background task, which passes
-`--quiet`), the launcher runs `python.exe` rather than `pythonw.exe`, so its
-output is visible here.
+Use `python.exe` here, not `pythonw.exe` -- this runs in a terminal, where
+seeing the output is the point. (The scheduled task calls the same launcher
+with `pythonw.exe --quiet` instead, precisely so nothing shows on screen
+every five minutes.) Called with no arguments (unlike the background task,
+which passes `--quiet`), the launcher prints normally.
 
 ## Report the result
 
