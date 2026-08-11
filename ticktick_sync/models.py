@@ -27,6 +27,14 @@ PERMITTED_TAGS = ("P0", "P1", "P2", "P3", "Draft", "Task", "Bug", "Clarification
 _CANONICAL = {tag.lower(): tag for tag in PERMITTED_TAGS}
 _ORDER = {tag.lower(): index for index, tag in enumerate(PERMITTED_TAGS)}
 
+# The vocabulary splits in two, and the halves are disjoint. `Draft` and the
+# priorities are properties of an ISSUE; the other three describe work that is
+# not an issue at all. An entry is an issue draft exactly when it names a
+# `source` -- the same test that decides whether its title keeps its original
+# language. github.py enforces both directions when reading the item file.
+ISSUE_ONLY_TAGS = frozenset({"draft", "p0", "p1", "p2", "p3"})
+NON_ISSUE_TAGS = frozenset({"task", "bug", "clarification"})
+
 
 def check_tag(tag):
     """Return the canonical spelling of a permitted tag, or raise.

@@ -5,7 +5,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-from ticktick_sync import github  # noqa: E402
+from ticktick_sync import github, models  # noqa: E402
 
 ISSUES = [
     {"number": 12, "title": "Pruefung der importierten Datensaetze",
@@ -24,11 +24,12 @@ version = 1
 
 [[items]]
 id = "abgleich-modus-c"
-title = "abgleich: record list still missing"
+title = "abgleich — neues Werkzeug, das die erfassten Datenluecken als Entwuerfe im Bestand schliesst"
 status = "open"
-tags = ["Draft", "Clarification"]
+tags = ["Draft", "P1"]
 priority = "P1"
 source = "ISSUE-20240115090000"
+source_url = "https://github.com/globex/toolkit/blob/master/docs/issues/ISSUE-20240115090000_report-drafts.md"
 description = "Blocks review -> release."
 
 [[items]]
@@ -37,6 +38,7 @@ title = "Structured checked-record provenance field"
 status = "open"
 tags = ["Clarification"]
 related = 12
+source_url = "https://github.com/globex/toolkit/blob/master/open-items.toml"
 description = "May become unnecessary if issue 12 removes the ambiguity."
 
 [[items]]
@@ -125,8 +127,20 @@ class ExcerptTest(unittest.TestCase):
     def test_a_short_body_is_taken_whole(self):
         self.assertEqual("Short and complete.", github.excerpt("Short and complete."))
 
+    def test_the_limit_is_broad_enough_to_say_what_is_at_stake(self):
+        """Raised from ~280 to ~560: one sentence names the work, but a reader
+        who only ever sees the task also needs the why and the stake."""
+        self.assertGreaterEqual(github.EXCERPT_LIMIT, 500)
+
+    def test_a_body_of_four_hundred_characters_is_no_longer_cut(self):
+        """The case the old limit truncated -- a normal two-sentence issue
+        opening."""
+        text = "x" * 200 + " " + "y" * 199
+
+        self.assertEqual(text, github.excerpt(text))
+
     def test_a_long_body_is_cut_at_a_sentence_boundary(self):
-        text = ("A. " * 120) + "trailing words that overflow the limit"
+        text = ("A. " * 250) + "trailing words that overflow the limit"
         cut = github.excerpt(text)
 
         self.assertLessEqual(len(cut), github.EXCERPT_LIMIT + 3)
@@ -206,7 +220,7 @@ class ItemFileTest(unittest.TestCase):
         self.assertLess(body.index("Source: ISSUE-20240115090000"), body.index("[sync:"))
 
     def test_the_tags_field_becomes_the_items_tags(self):
-        self.assertEqual({"draft", "clarification"},
+        self.assertEqual({"draft", "p1"},
                          set(github.toml_to_items(ITEMS_TOML)["oi-abgleich-modus-c"].tags))
 
     def test_an_item_without_tags_has_none(self):
@@ -218,15 +232,54 @@ class ItemFileTest(unittest.TestCase):
         shared repo; a stray one must not abort an unattended run."""
         self.assertIn("oi-abgleich-modus-c", github.toml_to_items(ITEMS_TOML))
 
-    def test_related_appends_the_issue_number_to_the_title(self):
-        """The word `issue`, then a bare number -- deliberately NOT `#12`, see
-        HashFreeTest below."""
-        self.assertEqual("Structured checked-record provenance field (issue 12 related)",
+    def test_related_appends_the_marker_in_square_brackets(self):
+        """Square brackets, capitalised, and LAST -- so a long German draft
+        title is not pushed off the visible line by our own annotation."""
+        self.assertEqual("Structured checked-record provenance field [Issue 12 Related]",
                          github.toml_to_items(ITEMS_TOML)["oi-datensatz-geprueft-feld"].title)
 
+    def test_the_related_marker_is_the_very_end_of_the_title(self):
+        self.assertTrue(
+            github.toml_to_items(ITEMS_TOML)["oi-datensatz-geprueft-feld"].title
+            .endswith(" [Issue 12 Related]"))
+
     def test_without_related_the_title_carries_no_suffix(self):
-        self.assertEqual("abgleich: record list still missing",
-                         github.toml_to_items(ITEMS_TOML)["oi-abgleich-modus-c"].title)
+        title = github.toml_to_items(ITEMS_TOML)["oi-abgleich-modus-c"].title
+
+        self.assertNotIn("Related", title)
+        self.assertNotIn("[", title)
+
+    def test_a_draft_title_is_passed_through_verbatim_german_and_all(self):
+        """An issue draft keeps its ORIGINAL name. This asserts one of the
+        German ones character for character, so a future 'helpful'
+        translation breaks the build instead of shipping."""
+        self.assertEqual(
+            "abgleich — neues Werkzeug, das die erfassten Datenluecken "
+            "als Entwuerfe im Bestand schliesst",
+            github.toml_to_items(ITEMS_TOML)["oi-abgleich-modus-c"].title)
+
+    def test_the_source_line_carries_the_url(self):
+        """The id alone is not tappable from a phone."""
+        body = github.toml_to_items(ITEMS_TOML)["oi-abgleich-modus-c"].body
+
+        self.assertIn("https://github.com/globex/toolkit/blob/master/docs/issues/"
+                      "ISSUE-20240115090000_report-drafts.md", body)
+
+    def test_the_source_line_keeps_the_id_beside_the_url(self):
+        """The id is the human-readable provenance, the URL the tap-through --
+        one line carries both."""
+        body = github.toml_to_items(ITEMS_TOML)["oi-abgleich-modus-c"].body
+        source_line = [line for line in body.split("\n") if line.startswith("Source:")]
+
+        self.assertEqual(1, len(source_line), "expected exactly one Source line: %r" % body)
+        self.assertIn("ISSUE-20240115090000", source_line[0])
+        self.assertIn("https://github.com/", source_line[0])
+
+    def test_an_item_with_only_a_url_still_renders_a_source_line(self):
+        body = github.toml_to_items(ITEMS_TOML)["oi-datensatz-geprueft-feld"].body
+
+        self.assertIn("Source: https://github.com/globex/toolkit/blob/master/"
+                      "open-items.toml", body)
 
     def test_a_tag_outside_the_permitted_set_raises_and_names_item_and_tag(self):
         """The Open API cannot create, rename or delete a tag (POST /tag is a
@@ -247,6 +300,106 @@ class ItemFileTest(unittest.TestCase):
         possible response to a broken file."""
         with self.assertRaises(github.GitHubReadFailed):
             github.toml_to_items("[[items]\nid = broken")
+
+
+class TagScopeTest(unittest.TestCase):
+    """`Draft` and the priorities belong to ISSUES; the rest do not.
+
+    An item is an issue draft exactly when it has a `source` -- the same test
+    that decides whether its name stays in the original language. From that
+    the vocabulary splits into two disjoint groups: {Draft, P0-P3} needs a
+    `source`, {Task, Clarification, Bug} needs the absence of one. Encoded as
+    a real check rather than a convention, because an unenforced rule drifts:
+    the file is hand-edited in a shared repo, and a wrong tag would quietly
+    produce a wrong list rather than failing.
+    """
+
+    def _toml(self, tags, source=True):
+        lines = ['version = 1', '', '[[items]]', 'id = "abgleich-modus-c"',
+                 'title = "T"', 'tags = [%s]' % ", ".join('"%s"' % tag for tag in tags)]
+        if source:
+            lines.append('source = "ISSUE-20240115090000"')
+        return "\n".join(lines) + "\n"
+
+    def test_draft_without_a_source_raises_and_names_item_and_tag(self):
+        with self.assertRaises(github.GitHubReadFailed) as caught:
+            github.toml_to_items(self._toml(["Draft"], source=False))
+
+        message = str(caught.exception)
+        self.assertIn("abgleich-modus-c", message)
+        self.assertIn("Draft", message)
+
+    def test_a_priority_without_a_source_raises(self):
+        """P0-P3 are ISSUE priorities. Nothing violates this today; it is
+        encoded so nothing can start to."""
+        for priority in ("P0", "P1", "P2", "P3"):
+            with self.assertRaises(github.GitHubReadFailed) as caught:
+                github.toml_to_items(self._toml([priority], source=False))
+
+            self.assertIn(priority, str(caught.exception))
+
+    def test_a_non_issue_tag_beside_draft_raises(self):
+        for tag in ("Task", "Clarification", "Bug"):
+            with self.assertRaises(github.GitHubReadFailed) as caught:
+                github.toml_to_items(self._toml(["Draft", tag]))
+
+            message = str(caught.exception)
+            self.assertIn("abgleich-modus-c", message)
+            self.assertIn(tag, message)
+
+    def test_a_non_issue_tag_beside_a_priority_raises(self):
+        for tag in ("Task", "Clarification", "Bug"):
+            with self.assertRaises(github.GitHubReadFailed) as caught:
+                github.toml_to_items(self._toml(["P1", tag]))
+
+            self.assertIn(tag, str(caught.exception))
+
+    def test_a_draft_may_carry_draft_and_a_priority_together(self):
+        """The legitimate combination -- most of the live file looks like
+        this."""
+        self.assertIn("oi-abgleich-modus-c", github.toml_to_items(self._toml(["Draft", "P0"])))
+
+    def test_a_non_issue_item_may_carry_task_or_clarification_or_bug(self):
+        for tag in ("Task", "Clarification", "Bug"):
+            self.assertIn("oi-abgleich-modus-c",
+                          github.toml_to_items(self._toml([tag], source=False)))
+
+
+LIVE_ITEMS = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                          "..", "..", "globex-toolkit-dev", "open-items.toml")
+
+
+@unittest.skipUnless(os.path.exists(LIVE_ITEMS), "the wiki working copy is not on this machine")
+class LiveItemFileTest(unittest.TestCase):
+    """The real file, parsed by the real code.
+
+    A fixture copy would drift from the file that actually gets mirrored, so
+    this reads the working copy beside this repo and skips where there is
+    none. On the machine that runs the sync -- the one that matters -- it
+    fails the build rather than the 06:05 run.
+    """
+
+    def _items(self):
+        with open(LIVE_ITEMS, encoding="utf-8") as handle:
+            return github.toml_to_items(handle.read())
+
+    def test_every_live_item_satisfies_the_tag_scope_rule(self):
+        self.assertEqual(12, len(self._items()))
+
+    def test_no_live_item_carries_a_hash(self):
+        for key, item in self._items().items():
+            self.assertNotIn("#", item.title, key)
+            self.assertNotIn("#", item.body, key)
+
+    def test_every_live_item_carries_a_tappable_source(self):
+        for key, item in self._items().items():
+            self.assertIn("Source: ", item.body, key)
+            self.assertIn("https://github.com/", item.body, key)
+
+    def test_every_live_marker_round_trips(self):
+        """The ids are the sync keys; a broken one orphans a real task."""
+        for key, item in self._items().items():
+            self.assertEqual(key, models.key_from_body(item.body))
 
 
 class HashFreeTest(unittest.TestCase):

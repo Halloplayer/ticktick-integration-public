@@ -11,7 +11,8 @@ import re
 import subprocess
 import tomllib
 
-from .models import Item, check_tag, issue_key, item_key, marker, tag_set
+from .models import (ISSUE_ONLY_TAGS, NON_ISSUE_TAGS, Item, check_tag, issue_key,
+                     item_key, marker, tag_set)
 
 
 class GitHubReadFailed(Exception):
@@ -26,9 +27,11 @@ PRIORITY_LABELS = ("P0", "P1", "P2", "P3")
 # cleaned once, in models.sanitise(), which Item applies to its own title and
 # body -- see there for why a `#` must never get out.
 
-# A task description is read on a phone, at a glance. Long enough to say what
-# the work is, short enough not to be a wall of text.
-EXCERPT_LIMIT = 280
+# A task description is read on a phone, at a glance. Broad enough that someone
+# who sees ONLY the task understands what to do, why it matters and what is at
+# stake -- one sentence names the work but leaves all three unanswered -- and
+# still short of a wall of text.
+EXCERPT_LIMIT = 560
 
 # Lines that carry no information once torn out of their markdown context.
 _FURNITURE = re.compile(r"^(#{1,6}\s|#{1,6}$|<!--|-->|[-*_]{3,}$|\|)")
@@ -155,6 +158,35 @@ def _check_shape(payload):
             "of [[items]] tables." % type(payload["items"]).__name__)
 
 
+def _check_tag_scope(item_id, tags, is_draft):
+    """`Draft` and the priorities are ISSUE properties; the rest are not.
+
+    An item is an issue draft exactly when it names a `source`. Both
+    directions are enforced, because the halves are disjoint: an item without
+    a source cannot be a `Draft` or carry a priority, and an item with one
+    cannot be a `Task`, `Bug` or `Clarification`.
+
+    A real check rather than a convention: the file is hand-edited in a shared
+    repo, and a tag in the wrong half would not break anything visibly -- it
+    would just quietly produce a wrong list, which is the kind of error nobody
+    goes looking for.
+    """
+    for tag in sorted(tags):
+        if tag in ISSUE_ONLY_TAGS and not is_draft:
+            raise GitHubReadFailed(
+                "Item '%s' is tagged '%s', but it has no `source`, so it is not an "
+                "issue draft. `Draft` and the priorities P0-P3 say something about an "
+                "ISSUE; work that is not an issue takes Task, Bug or Clarification."
+                % (item_id, check_tag(tag)))
+        if tag in NON_ISSUE_TAGS and is_draft:
+            raise GitHubReadFailed(
+                "Item '%s' is tagged '%s', but it names a `source`, which makes it an "
+                "issue draft. Task, Bug and Clarification describe work that is NOT an "
+                "issue, so they cannot sit beside `Draft` or a priority. Put the "
+                "substance in the description instead."
+                % (item_id, check_tag(tag)))
+
+
 def toml_to_items(text):
     try:
         payload = tomllib.loads(text)
@@ -182,6 +214,8 @@ def toml_to_items(text):
         except ValueError as error:
             raise GitHubReadFailed("Item '%s': %s" % (item_id, error)) from error
 
+        _check_tag_scope(item_id, tags, is_draft=bool(raw.get("source")))
+
         title = raw["title"]
         related = raw.get("related")
         if related is not None:
@@ -189,17 +223,25 @@ def toml_to_items(text):
                 raise GitHubReadFailed(
                     "Item '%s' has `related = %r`; it must be an issue NUMBER."
                     % (item_id, related))
-            # `(issue 12 related)`, never `(#12 related)` -- a `#` here would
-            # create a tag named `12` in the owner's account.
-            title = "%s (issue %d related)" % (title, related)
+            # Last, and square-bracketed: an item's own name comes first, and
+            # a draft title can run to ~130 characters, so our annotation must
+            # not push it off the visible line. Never `#12` -- a `#` here
+            # would create a tag named `12` in the owner's account. Square
+            # brackets cannot be confused with the sync marker: that one
+            # requires a literal `sync:` and a key charset without spaces, and
+            # it lives in the body (see models.key_from_body and its tests).
+            title = "%s [Issue %d Related]" % (title, related)
 
         # Description first, marker last: the app shows the opening lines, so
         # that is where the explanation belongs. `note` stays supported for
         # anything a contributor adds beside the description.
         prose = [text for text in (raw.get("description"), raw.get("note")) if text]
         trailer = []
-        if raw.get("source"):
-            trailer.append("Source: %s" % raw["source"])
+        # The id is the human-readable provenance, the URL the tap-through --
+        # an id alone cannot be opened from a phone. One line carries both.
+        provenance = [text for text in (raw.get("source"), raw.get("source_url")) if text]
+        if provenance:
+            trailer.append("Source: %s" % " - ".join(provenance))
         if raw.get("owner"):
             trailer.append("With: %s" % raw["owner"])
         trailer.append(marker(key))
