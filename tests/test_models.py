@@ -116,6 +116,20 @@ class SanitiseTest(unittest.TestCase):
     def test_a_cross_reference_becomes_readable_prose(self):
         self.assertEqual("See issue 12 for context.", models.sanitise("See #12 for context."))
 
+    def test_a_reference_attached_to_the_preceding_word_does_not_collide(self):
+        """The COMMON case, not an edge one.
+
+        `owner/repo#10` is the repo-qualified reference style these issue
+        bodies actually use, and the first version of this sanitiser -- which
+        substituted `issue \\1` with no separator -- turned it into
+        `acme/widgetsissue 10` in the live desired set.
+        """
+        self.assertEqual("globex/toolkit issue 10",
+                         models.sanitise("acme/widgets#10"))
+
+    def test_several_attached_references_in_one_line_each_separate(self):
+        self.assertEqual("a issue 1 b issue 2", models.sanitise("a#1 b#2"))
+
     def test_a_markdown_heading_loses_its_hashes(self):
         self.assertEqual("Problem", models.sanitise("## Problem"))
 

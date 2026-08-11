@@ -86,13 +86,20 @@ def sanitise(text):
     removal leaves behind is collapsed so a markdown heading does not arrive
     indented. Line structure survives -- bodies are built line by line.
 
+    The replacement inserts a LEADING space. Without one, a reference attached
+    to the word before it collided with that word: `acme/widgets#10`
+    came out as `acme/widgetsissue 10`. That repo-qualified form is the style
+    these issue bodies actually use, so it was the common case, not an edge
+    one. The added space costs nothing where a space was already there -- the
+    collapse below removes the double again.
+
     This is deliberately ONE function, called from Item.__post_init__ rather
     than from each mapper: a chokepoint that has to be remembered is not a
     chokepoint, and it must also protect sources nobody has written yet.
     """
     if not text:
         return text
-    cleaned = _ISSUE_REF.sub(r"issue \1", text).replace("#", "")
+    cleaned = _ISSUE_REF.sub(r" issue \1", text).replace("#", "")
     lines = [re.sub(r"[ \t]+", " ", line).strip() for line in cleaned.split("\n")]
     return "\n".join(lines).strip()
 
