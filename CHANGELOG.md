@@ -18,6 +18,15 @@ convention existed, and back-filling them would mean inventing numbers.
   (so the live `globex/toolkit` config, English today, cannot silently revert to German), to
   `"de"` otherwise -- the decision is written back into `config.toml` so it happens exactly once.
   `setup.py init` gained `--language` and the skill now asks which one the user wants.
+
+### Fixed
+- **`open-items.toml`'s `title_en` (a draft's hand-written title translation) now honours
+  `language` too.** It was left rendering unconditionally when the `language` setting above was
+  added, so a `"de"` repo whose file carried a `title_en` still opened that task's body with an
+  English first line ahead of an otherwise all-German task -- exactly the artifact `"de"` promises
+  to remove, and a mixed-language body besides. `toml_to_items()` gained the same `language`
+  parameter `issues_to_items()` already had; `title_en` now renders only in `"en"` and is simply
+  left unrendered (not an error, not removed from the file) in `"de"`.
 - **Conversational setup for a new repository**, driven by the rewritten
   `SKILL.md` plus `skills/ticktick-sync/scripts/setup.py`. It derives the slug
   from `git remote get-url origin` and has the user confirm it, reports whether

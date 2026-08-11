@@ -154,11 +154,14 @@ outcome available here. A repository with no translations file migrates to
 the default, `"de"`. Either way, `language` is now explicit in the file;
 edit it by hand to change it later.
 
-`open-items.toml`'s own `title_en` field (see "Item fields" above) is
-unrelated to this setting and always renders when present, in either
-language -- it is a hand-maintained translation living beside the German
-title it translates in the same file, not part of the `issue-descriptions.toml`
-cache this setting gates.
+`open-items.toml`'s own `title_en` field (see "Item fields" above) is gated by
+the same setting, even though it is not part of the `issue-descriptions.toml`
+cache: in `"en"` it opens the body as its own first line, exactly as before;
+in `"de"` it is simply not rendered, and that is not an error -- the field
+stays in the file, untouched, for whenever the repo's language changes back.
+Leaving it always-on would have meant an English first line ahead of an
+otherwise all-German task -- exactly the artifact `"de"` promises to remove,
+and a mixed-language body besides.
 
 ## Tags, and the one rule about `#`
 
@@ -282,7 +285,7 @@ tag table and the `open-items.toml` example above), an item may also carry:
 | Field | Meaning |
 |---|---|
 | `description` | see "What a task says" above -- the task's opening text |
-| `title_en` | an English translation of a draft's (German) `title`, shown as the body's opening line -- see "Issue descriptions AND titles are translated by hand" below. Valid only on an item that names a `source` (an issue draft); on anything else it raises, since that item is already titled in English |
+| `title_en` | an English translation of a draft's (German) `title`, shown as the body's opening line **when the repo's `language` is `"en"`** (rendered nowhere in `"de"`, though the field itself stays in the file) -- see "Issue descriptions AND titles are translated by hand" below. Valid only on an item that names a `source` (an issue draft); on anything else it raises, since that item is already titled in English |
 | `source_url` | a tap-through link, appended to the `Source:` line alongside `source` (`Source: <source> - <source_url>` when both are set) |
 | `related` | a GitHub issue **number** this item relates to; renders as the `[Issue Related -> N] ` prefix |
 | `related_draft` | the **item id** (not the title) of a draft this item -- always tagged `Clarification` -- is a clarification about; renders as the `[Draft Related -> ...] ` prefix, with the title resolved live |
@@ -402,7 +405,11 @@ the English `title_en` sit side by side in the same hand-edited file, so an
 edit to one is visible right next to the other and drift cannot hide the way
 it can across two separate files. `title_en` is valid only on a draft (an
 item naming a `source`); on anything else it raises `GitHubReadFailed`, since
-that item is already titled in English.
+that item is already titled in English. It is gated by `language` the same
+way the issue-side title translation is: rendered as the body's opening line
+only when the repo is `"en"`; simply not rendered in `"de"`, with the field
+itself left untouched in the file for whenever the repo's language changes
+back (see "Choosing a language" above).
 
 ## Only one run at a time
 

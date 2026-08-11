@@ -502,7 +502,7 @@ def _known_items(payload):
     return known
 
 
-def toml_to_items(text):
+def toml_to_items(text, language="en"):
     try:
         payload = tomllib.loads(text)
     except tomllib.TOMLDecodeError as error:
@@ -540,7 +540,9 @@ def toml_to_items(text):
         # on anything else: an item without a `source` is already titled in
         # English, so a translation of it would say nothing, and gets caught
         # here rather than silently ignored -- same discipline as the tag
-        # and status checks above.
+        # and status checks above. This check fires regardless of `language`:
+        # a misplaced field is a shape error either way, not a translation
+        # decision.
         title_en = raw.get("title_en")
         if title_en is not None and not is_draft:
             raise GitHubReadFailed(
@@ -560,7 +562,15 @@ def toml_to_items(text):
         # The translation opens the body, ahead of the description, so a
         # reader sees the English title before anything else -- then a blank
         # line, exactly like the description/Source/marker layout below.
-        lead = [title_en, ""] if title_en else []
+        # Gated on `language` exactly like the issue-side translations
+        # (issues_to_items): in "de" nothing is translated, full stop, so an
+        # English first line ahead of a German description would be both the
+        # exact artifact the owner asked to be rid of AND a mixed-language
+        # body. `title_en` present on a "de" repo is not an error -- a repo's
+        # language can change over time, and losing hand-written text because
+        # it is briefly unused would be worse than leaving it dormant in the
+        # file.
+        lead = [title_en, ""] if title_en and language == "en" else []
 
         # Description first, marker last: the app shows the opening lines, so
         # that is where the explanation belongs. `note` stays supported for
@@ -633,5 +643,5 @@ def read_desired(config, run=subprocess.run, translations_path=None):
     _check_language(language, config.get("repo", "?"))
     translations = load_translations(translations_path) if language != "de" else {}
     desired = issues_to_items(issues, translations, language=language)
-    desired.update(toml_to_items(text))
+    desired.update(toml_to_items(text, language=language))
     return desired

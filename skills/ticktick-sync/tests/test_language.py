@@ -86,6 +86,88 @@ class DeTitleTest(unittest.TestCase):
         self.assertFalse(items["gh-9"].untranslated)
 
 
+TITLE_EN_ITEM_TOML = """
+version = 1
+
+[[items]]
+id = "abgleich-modus-c"
+title = "Ein deutscher Entwurfstitel"
+title_en = "An English title"
+status = "open"
+tags = ["Draft"]
+source = "ISSUE-20240115090000"
+description = "Die deutsche Beschreibung."
+"""
+
+
+class DeTomlTitleEnTest(unittest.TestCase):
+    """`open-items.toml`'s own `title_en` (an issue draft's hand-written
+    title translation, no hash, sitting right beside the German title in the
+    same file) must be gated by `language` exactly like the issue-side
+    translations -- not rendered just because the field happens to be
+    present. A repo whose file was copied from an English one, or switched
+    from "en" to "de" later, would otherwise silently keep showing an
+    English first line ahead of an all-German body -- precisely the
+    translation artifact "de" promises to remove, and a mixed-language body
+    besides."""
+
+    def test_de_renders_no_title_en_line_the_body_opens_with_the_description(self):
+        items = github.toml_to_items(TITLE_EN_ITEM_TOML, language="de")
+
+        body = items["oi-abgleich-modus-c"].body
+        self.assertTrue(body.startswith("Die deutsche Beschreibung."),
+                        "body starts: %r" % body[:60])
+        self.assertNotIn("An English title", body)
+
+    def test_en_still_renders_it_guard_against_over_correcting(self):
+        items = github.toml_to_items(TITLE_EN_ITEM_TOML, language="en")
+
+        body = items["oi-abgleich-modus-c"].body
+        self.assertTrue(body.startswith("An English title\n\n"),
+                        "body starts: %r" % body[:60])
+
+    def test_the_default_language_still_renders_it(self):
+        """No `language` argument at all -- every pre-existing direct call to
+        toml_to_items() in test_github.py -- must keep behaving as it always
+        did."""
+        items = github.toml_to_items(TITLE_EN_ITEM_TOML)
+
+        self.assertTrue(items["oi-abgleich-modus-c"].body.startswith("An English title\n\n"))
+
+    def test_switching_a_config_from_en_to_de_changes_the_rendered_body_title_en_kept_intact(self):
+        """The file itself is untouched by the switch -- only the rendering
+        changes. Proves the gate lives in the reader, not in the data."""
+        en_body = github.toml_to_items(TITLE_EN_ITEM_TOML, language="en")["oi-abgleich-modus-c"].body
+        de_body = github.toml_to_items(TITLE_EN_ITEM_TOML, language="de")["oi-abgleich-modus-c"].body
+
+        self.assertNotEqual(en_body, de_body)
+        self.assertIn("An English title", en_body)
+        self.assertNotIn("An English title", de_body)
+        # The source text itself carries title_en regardless of which way it
+        # was just rendered -- switching back to "en" loses nothing.
+        self.assertIn('title_en = "An English title"', TITLE_EN_ITEM_TOML)
+
+    def test_read_desired_in_de_does_not_render_a_draft_title_en_either(self):
+        """End to end through read_desired(): a "de" config must gate the
+        item-file title too, not just the issue-side one."""
+        def fake_run(args, **kwargs):
+            class Result:
+                returncode = 0
+                stderr = ""
+                if "issue" in args:
+                    stdout = json.dumps([])
+                else:
+                    stdout = json.dumps(
+                        {"content": base64.b64encode(TITLE_EN_ITEM_TOML.encode("utf-8")).decode()})
+            return Result()
+
+        desired = github.read_desired(
+            {"repo": "acme/widgets", "items_path": "open-items.toml", "language": "de"},
+            run=fake_run)
+
+        self.assertNotIn("An English title", desired["oi-abgleich-modus-c"].body)
+
+
 class DeUntranslatedCounterTest(unittest.TestCase):
     def test_read_desired_never_marks_a_de_item_untranslated(self):
         """Through the real read_desired() path, with a `run` fake standing in
