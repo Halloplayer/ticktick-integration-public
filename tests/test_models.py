@@ -204,6 +204,15 @@ class MarkerTest(unittest.TestCase):
 
         self.assertEqual("oi-a", models.key_from_body(body))
 
+    def test_a_marker_is_found_after_a_leading_title_translation_line(self):
+        """The body may now open with an English title-translation line
+        before the description (see the title_en / title_sha256 mechanism in
+        ticktick_sync.github) -- key_from_body must still recover the key
+        regardless, since it is the only thing preventing duplicate tasks."""
+        body = "An English title.\n\nAn English description.\n\nSource: x\n[sync:oi-a]"
+
+        self.assertEqual("oi-a", models.key_from_body(body))
+
     def test_a_body_without_a_marker_yields_none(self):
         self.assertIsNone(models.key_from_body("made by hand"))
 

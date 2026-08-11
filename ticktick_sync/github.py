@@ -101,7 +101,8 @@ TRANSLATIONS_PATH = pathlib.Path(__file__).resolve().parent.parent / "issue-desc
 
 
 def load_translations(path=TRANSLATIONS_PATH):
-    """number -> (source_sha256, description), read from issue-descriptions.toml.
+    """number -> (source_sha256, description, title_sha256, title_en), read
+    from issue-descriptions.toml.
 
     The sync has no LLM and no translation API -- either would break its
     determinism and its zero-dependency rule -- so translation happens out of
@@ -110,13 +111,20 @@ def load_translations(path=TRANSLATIONS_PATH):
     and every issue falls back to its German excerpt (see
     _translated_description) rather than aborting the run over a file whose
     only job is a cosmetic one.
+
+    `title_sha256`/`title_en` are optional per entry -- unlike `source_sha256`
+    /`description`, which every entry has always carried. An issue not yet
+    given a title translation simply gets none (see _translated_title):
+    `entry.get(...)` rather than `entry[...]` so an older or partial entry
+    does not become a read failure over a cosmetic field.
     """
     try:
         with open(path, "rb") as handle:
             payload = tomllib.load(handle)
     except FileNotFoundError:
         return {}
-    return {entry["number"]: (entry["source_sha256"], entry["description"])
+    return {entry["number"]: (entry["source_sha256"], entry["description"],
+                              entry.get("title_sha256"), entry.get("title_en"))
             for entry in payload.get("issues", [])}
 
 
@@ -140,6 +148,33 @@ def _translated_description(number, excerpt_text, translations):
     cached = translations.get(number)
     if cached is not None and cached[0] == digest:
         return cached[1], False
+    return UNTRANSLATED_PREFIX + sanitised, True
+
+
+def _translated_title(number, title, translations):
+    """(title_line, is_untranslated) for one issue's title, or (None, False)
+    if no title translation was ever attempted for this issue.
+
+    Unlike the description, `title_sha256` is OPTIONAL per cache entry: it is
+    a newer field, being added incrementally, and an issue nobody has
+    translated the title of yet must not suddenly grow an "[untranslated]"
+    line it never had before -- that would fire on every entry (and every
+    test fixture) still on the old two-field shape. Once an entry DOES carry
+    `title_sha256`, though, the same discipline as the description applies: a
+    matching hash uses the cached English title, anything else (a stale hash
+    or -- once present -- a missing one) falls back to the German title
+    itself, prefixed and counted, exactly like _translated_description.
+    """
+    cached = translations.get(number)
+    title_sha256 = cached[2] if cached is not None and len(cached) > 2 else None
+    if title_sha256 is None:
+        return None, False
+    sanitised = sanitise(title) if title else ""
+    if not sanitised:
+        return None, False
+    digest = hashlib.sha256(sanitised.encode("utf-8")).hexdigest()
+    if digest == title_sha256:
+        return cached[3], False
     return UNTRANSLATED_PREFIX + sanitised, True
 
 
@@ -173,6 +208,14 @@ def issues_to_items(payload, translations=None):
     reaching TickTick is either a hand-translated cache hit or a visibly
     marked, counted fallback -- never a silent German excerpt. The marker
     comes last, because the first line is what the app shows.
+
+    The TITLE itself stays German (see above) -- but when a cached English
+    translation exists for it (_translated_title), that translation opens the
+    BODY as its own first line, ahead of the description, so a reader sees
+    what the task is in English before anything else. The title used for
+    this is the issue's own, without the ISSUE_SUFFIX appended below: the
+    suffix annotates the mirrored task, it is not part of what GitHub called
+    the issue and must not be translated.
     """
     translations = translations if translations is not None else {}
     items = {}
@@ -181,7 +224,11 @@ def issues_to_items(payload, translations=None):
         labels = [label["name"] for label in issue.get("labels", [])]
         tags = tag_set(label for label in labels if label in PRIORITY_LABELS)
         parts = []
-        description, is_untranslated = _translated_description(
+        title_line, title_untranslated = _translated_title(
+            issue["number"], issue.get("title"), translations)
+        if title_line:
+            parts += [title_line, ""]
+        description, desc_untranslated = _translated_description(
             issue["number"], excerpt(issue.get("body")), translations)
         if description:
             parts += [description, ""]
@@ -190,7 +237,7 @@ def issues_to_items(payload, translations=None):
         parts.append(marker(key))
         title = "%s%s" % (issue["title"], ISSUE_SUFFIX % issue["number"])
         items[key] = Item(key=key, title=title, body="\n".join(parts), tags=tags,
-                          untranslated=is_untranslated)
+                          untranslated=desc_untranslated or title_untranslated)
     return items
 
 
@@ -406,6 +453,22 @@ def toml_to_items(text):
         is_draft = bool(raw.get("source"))
         _check_tag_scope(item_id, tags, is_draft=is_draft)
 
+        # A draft's own title is German (see 'Naming' in README.md); its
+        # translation sits right beside it as `title_en`, with no hash --
+        # the two are hand-edited together in the same file, so an edit to
+        # one is visible next to the other and drift cannot hide. Meaningless
+        # on anything else: an item without a `source` is already titled in
+        # English, so a translation of it would say nothing, and gets caught
+        # here rather than silently ignored -- same discipline as the tag
+        # and status checks above.
+        title_en = raw.get("title_en")
+        if title_en is not None and not is_draft:
+            raise GitHubReadFailed(
+                "Item '%s' has `title_en`, but it has no `source`, so it is not an "
+                "issue draft. Only a draft keeps its original (German) title -- an "
+                "item without one is already titled in English, and a translation "
+                "of it would say nothing." % item_id)
+
         # The suffix goes last: an item's own name comes first, and a draft
         # title runs to ~130 characters, so the annotation must not push the
         # name off the visible line. Square brackets cannot be confused with
@@ -413,6 +476,11 @@ def toml_to_items(text):
         # charset without spaces, and lives in the body (see
         # models.key_from_body and its tests).
         title = raw["title"] + _link_suffix(item_id, raw, tags, is_draft, known)
+
+        # The translation opens the body, ahead of the description, so a
+        # reader sees the English title before anything else -- then a blank
+        # line, exactly like the description/Source/marker layout below.
+        lead = [title_en, ""] if title_en else []
 
         # Description first, marker last: the app shows the opening lines, so
         # that is where the explanation belongs. `note` stays supported for
@@ -427,7 +495,7 @@ def toml_to_items(text):
         if raw.get("owner"):
             trailer.append("With: %s" % raw["owner"])
         trailer.append(marker(key))
-        parts = prose + ([""] if prose else []) + trailer
+        parts = lead + prose + ([""] if prose else []) + trailer
 
         items[key] = Item(key=key, title=title, body="\n".join(parts), tags=tags)
     return items

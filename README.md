@@ -127,6 +127,25 @@ enforced by the reader (an item without one simply opens with no text at
 all), but it is the whole reason a task can be understood without opening
 anything, so treat it as required in practice.
 
+A task's **title** stays in whatever language it was written -- German for a
+mirrored GitHub issue or an issue draft, see "Naming" below -- but when an
+English translation of that title exists, it opens the body as its own first
+line, ahead of the description:
+
+```
+<English translation of the title>
+
+<description>
+
+Source: <ISSUE-... id, or the issue URL>
+[sync:<key>]
+```
+
+An English-titled item (`Task`, `Bug`, `Clarification`) gets no such line --
+it is already English, so a translation of it would say nothing. See "Issue
+descriptions AND titles are translated by hand" below for where the
+translation itself comes from.
+
 ## Item fields
 
 Beyond `id`, `title`, `status`, `owner`, `tags`, `source` and `note` (see the
@@ -135,6 +154,7 @@ tag table and the `open-items.toml` example above), an item may also carry:
 | Field | Meaning |
 |---|---|
 | `description` | see "What a task says" above -- the task's opening text |
+| `title_en` | an English translation of a draft's (German) `title`, shown as the body's opening line -- see "Issue descriptions AND titles are translated by hand" below. Valid only on an item that names a `source` (an issue draft); on anything else it raises, since that item is already titled in English |
 | `source_url` | a tap-through link, appended to the `Source:` line alongside `source` (`Source: <source> - <source_url>` when both are set) |
 | `related` | a GitHub issue **number** this item relates to; renders as the ` [Issue Related -> N]` suffix |
 | `related_draft` | the **item id** (not the title) of a draft this item -- always tagged `Clarification` -- is a clarification about; renders as the ` [Draft Related -> ...]` suffix, with the title resolved live |
@@ -150,7 +170,11 @@ issue's title is mirrored exactly as GitHub returns it, and a draft's title in
 `open-items.toml` is whatever the draft itself is called. Everything else
 (`Task`, `Bug`, `Clarification` items) is named in English. `description` is
 always English, regardless of which of these an item is -- it is read cold
-from a phone and needs no context to make sense.
+from a phone and needs no context to make sense. Since a task's title itself
+stays German for the ten items that need it, an English translation of that
+title opens the body as its own first line instead -- see "What a task says"
+above and "Issue descriptions AND titles are translated by hand" below for where that
+translation comes from.
 
 ## Running it by hand
 
@@ -203,7 +227,7 @@ see:
   guard for that run. A **missing** `state.json` remains a legitimate fresh
   start; only an unreadable one refuses.
 
-## Issue descriptions are translated by hand
+## Issue descriptions AND titles are translated by hand
 
 Task descriptions must always be English, but a GitHub issue's own body is
 German, and the sync has no LLM and no translation API -- either would break
@@ -217,6 +241,25 @@ prefixed `[untranslated] ` and counted into the summary line's
 upstream since somebody translated it -- update the entry in
 `issue-descriptions.toml` (new excerpt, new hash, new translation) to clear
 it.
+
+An issue's **title** stays German too (see "Naming" above), and its
+translation lives in the same `issue-descriptions.toml` entry, alongside the
+description: `title_sha256` (a hash of the sanitised title, WITHOUT the
+generated ` [Issue -> N]` suffix -- that suffix is never translated) and
+`title_en`. A matching hash opens the task's body with that translation, as
+its own first line ahead of the description; a mismatch gets the same
+`[untranslated] ` treatment as a stale description and counts toward the same
+`untranslated=N`. Unlike the description fields, `title_sha256`/`title_en`
+are optional per entry: an issue nobody has translated the title of yet
+simply shows no title line at all, rather than a spurious `[untranslated]`.
+
+An **issue draft** in `open-items.toml` (see "Item fields" above) keeps its
+own title German too, but its translation needs no hash: the German title and
+the English `title_en` sit side by side in the same hand-edited file, so an
+edit to one is visible right next to the other and drift cannot hide the way
+it can across two separate files. `title_en` is valid only on a draft (an
+item naming a `source`); on anything else it raises `GitHubReadFailed`, since
+that item is already titled in English.
 
 ## Only one run at a time
 

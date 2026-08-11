@@ -1,6 +1,7 @@
 """Tests for the GitHub adapter -- against recorded shapes, not the network."""
 import os
 import sys
+import tomllib
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -314,6 +315,53 @@ class ItemFileTest(unittest.TestCase):
             github.toml_to_items("[[items]\nid = broken")
 
 
+class ItemTitleTranslationTest(unittest.TestCase):
+    """A draft's title is German (see 'Naming' in README.md); its English
+    translation sits beside it in the same file as `title_en`, unlike an
+    issue's, which needs the hash-guarded cache in issue-descriptions.toml --
+    the German original and its translation are edited together here, so an
+    edit to one is visible right next to the other and no fingerprint is
+    needed to catch drift."""
+
+    def test_a_draft_with_title_en_opens_the_body_with_the_translation(self):
+        text = ('version = 1\n\n[[items]]\nid = "abgleich-modus-c"\n'
+               'title = "Ein deutscher Titel"\ntags = ["Draft"]\n'
+               'source = "ISSUE-20240115090000"\n'
+               'title_en = "A German title"\n'
+               'description = "The actual English description."\n')
+
+        body = github.toml_to_items(text)["oi-abgleich-modus-c"].body
+
+        self.assertTrue(
+            body.startswith("A German title\n\nThe actual English description."),
+            "body starts: %r" % body[:80])
+
+    def test_an_english_titled_item_opens_with_the_description_alone(self):
+        """No `title_en` -> no such line. Nothing here needs a translation."""
+        text = ('version = 1\n\n[[items]]\nid = "a-task"\n'
+               'title = "An English title"\ntags = ["Task"]\n'
+               'description = "The description."\n')
+
+        body = github.toml_to_items(text)["oi-a-task"].body
+
+        self.assertTrue(body.startswith("The description."), "body starts: %r" % body[:60])
+        self.assertNotIn("\n\nThe description.", body)
+
+    def test_title_en_without_a_source_raises_and_names_the_item(self):
+        """`title_en` is meaningless on an item that is not an issue draft --
+        it is already titled in English. Same discipline as the existing tag
+        and status checks: a wrong field on a hand-edited shared file fails
+        the run rather than shipping something nobody asked for."""
+        text = ('version = 1\n\n[[items]]\nid = "not-a-draft"\n'
+               'title = "An English title"\ntags = ["Task"]\n'
+               'title_en = "Should not be here"\n')
+
+        with self.assertRaises(github.GitHubReadFailed) as caught:
+            github.toml_to_items(text)
+
+        self.assertIn("not-a-draft", str(caught.exception))
+
+
 GERMAN_DRAFT_TITLE = ("abgleich — neues Werkzeug, das die erfassten Datenluecken "
                       "als Entwuerfe im Bestand schliesst")
 
@@ -551,6 +599,20 @@ class LiveItemFileTest(unittest.TestCase):
         """The ids are the sync keys; a broken one orphans a real task."""
         for key, item in self._items().items():
             self.assertEqual(key, models.key_from_body(item.body))
+
+    def test_every_live_draft_carries_a_title_en(self):
+        """Every open issue draft in the real file SHOULD have an English
+        translation of its (German) title -- so a newly added draft that
+        forgets one fails the build instead of shipping a German-only task."""
+        with open(LIVE_ITEMS, encoding="utf-8") as handle:
+            payload = tomllib.loads(handle.read())
+        drafts = [item for item in payload["items"]
+                 if item.get("source") and item.get("status", "open") == "open"]
+
+        self.assertEqual(7, len(drafts), "expected seven open issue drafts")
+        for item in drafts:
+            self.assertTrue(item.get("title_en"),
+                            "draft '%s' has no title_en" % item["id"])
 
 
 class HashFreeTest(unittest.TestCase):
