@@ -1,5 +1,5 @@
 ---
-name: ticktick-integration
+name: sync
 description: Mirrors a repository's open work -- its open GitHub issues plus the neutral item list open-items.toml -- into a TickTick list, one-way and strict, the repo always wins. Works for ANY repository: invoked inside one that is not set up yet, it asks what it needs, resolves or creates the TickTick list, drops an open-items.toml into the repo and mirrors it from then on alongside every other configured repo. Use this skill when the user says "ticktick sync", "update my list", "sync my ticktick", "open items to ticktick", "mirror this repo to ticktick", "set up ticktick for this repo", or when issues or the item list changed during a session and the state on their phone should be current.
 ---
 
@@ -26,7 +26,7 @@ never mention TickTick or syncing.
 
 ```bash
 git remote get-url origin
-PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/ticktick-integration/scripts/setup.py" slug --remote "<the url>"
+PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/sync/scripts/setup.py" slug --remote "<the url>"
 ```
 
 It prints `slug=`, `repo=` and `configured=`. **Confirm the repo with the user
@@ -42,14 +42,14 @@ would otherwise silently become the thing that gets mirrored.
 Show the user what already exists rather than making them recall a name:
 
 ```bash
-PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/ticktick-integration/scripts/setup.py" lists
+PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/sync/scripts/setup.py" lists
 ```
 
 Ask which one to mirror into, or what a new one should be called. Then resolve
 it:
 
 ```bash
-PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/ticktick-integration/scripts/setup.py" ensure-list --name "<list name>"
+PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/sync/scripts/setup.py" ensure-list --name "<list name>"
 ```
 
 - Exit 0 -- it prints `list_id=`; keep it for step 4.
@@ -71,7 +71,7 @@ which resolves an existing list by name.
 ## 3. Put the item list in the repository
 
 ```bash
-PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/ticktick-integration/scripts/setup.py" open-items --path .
+PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/sync/scripts/setup.py" open-items --path .
 ```
 
 Creates `open-items.toml` if it is absent (`version = 1`, `items = []`), never
@@ -97,7 +97,7 @@ English tasks and is willing to maintain that cache.
 ## 5. Write the configuration and sync
 
 ```bash
-PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/ticktick-integration/scripts/setup.py" init \
+PYTHONIOENCODING=utf-8 python "${CLAUDE_PLUGIN_ROOT}/skills/sync/scripts/setup.py" init \
   --repo "<owner/repo>" --list-id "<list id>" --list-name "<list name>" --language de
 ```
 

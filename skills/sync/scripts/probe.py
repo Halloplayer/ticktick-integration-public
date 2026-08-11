@@ -1,4 +1,4 @@
-# skills/ticktick-integration/scripts/probe.py
+# skills/sync/scripts/probe.py
 """Ask the live TickTick API what it actually supports, and record the answers.
 
 Nothing here is designed against a guessed endpoint. Throwaway in spirit but

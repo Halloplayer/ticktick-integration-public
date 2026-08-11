@@ -35,7 +35,7 @@ by tests. Do not work around a firing guard by disabling it.
 ## Tests
 
 ```bash
-PYTHONIOENCODING=utf-8 python -m unittest discover -s skills/ticktick-integration/tests -p "test_*.py"
+PYTHONIOENCODING=utf-8 python -m unittest discover -s skills/sync/tests -p "test_*.py"
 ```
 
 Standard library only -- `unittest`, never `pytest`. All of them must pass before a push. They are offline -- the GitHub and TickTick

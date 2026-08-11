@@ -1,7 +1,7 @@
 """Setting a repository up -- the one path that may create a TickTick list.
 
 Everything here runs once per repository, driven conversationally by the skill
-(`skills/ticktick-integration/SKILL.md`). It is kept apart from the sync engine on
+(`skills/sync/SKILL.md`). It is kept apart from the sync engine on
 purpose: the sync must NEVER create a list. A mirror that quietly creates its
 own list turns "there is no list named X" -- a configuration mistake, loudly
 recoverable -- into a second, silently empty list in somebody's personal task

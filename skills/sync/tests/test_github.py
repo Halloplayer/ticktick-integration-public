@@ -596,7 +596,7 @@ def _wiki_dir():
     """Locate the globex-toolkit-dev working copy beside this repo.
 
     A hard-coded number of "..\" segments is exactly what broke this once
-    already: the tests moved a directory deeper (tests/ -> skills/ticktick-integration/
+    already: the tests moved a directory deeper (tests/ -> skills/sync/
     tests/) and a fixed depth silently stopped resolving, so all five guards
     below fell back to "skipped" instead of failing loudly. Walk up from this
     file to the ticktick-integration repo root (marked by .git) instead, so a future

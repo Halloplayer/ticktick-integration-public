@@ -25,7 +25,7 @@ claude plugin install ticktick-integration@ticktick-integration
 
 Skill and engine then come from the plugin cache, and this repo does not need to
 stay cloned -- except to run the one-time setup below, which uses
-`skills/ticktick-integration/scripts/`.
+`skills/sync/scripts/`.
 
 Changing the plugin rather than using it: see [`DEVELOPMENT.md`](DEVELOPMENT.md)
 and [`CONTRIBUTING.md`](CONTRIBUTING.md).

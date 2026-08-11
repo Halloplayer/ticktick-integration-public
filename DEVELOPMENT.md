@@ -17,7 +17,7 @@ There are two ways to relate to this plugin — **do not confuse them**:
 ```
 .claude-plugin/       plugin.json (the manifest) + marketplace.json
 lib/                  the engine — shared modules, flat, no package
-skills/ticktick-integration/
+skills/sync/
   SKILL.md            the manual trigger
   scripts/            sync.py (entry point), setup.py, install_task.ps1, probe.py
   tests/              the suite + recorded API fixtures
@@ -50,16 +50,16 @@ so that a plugin update mid-session cannot leave it on a stale version. See
 ## Tests
 
 ```bash
-PYTHONIOENCODING=utf-8 python -m unittest discover -s skills/ticktick-integration/tests -p "test_*.py"
+PYTHONIOENCODING=utf-8 python -m unittest discover -s skills/sync/tests -p "test_*.py"
 ```
 
 Standard library only -- `unittest`, never `pytest`. Fully offline, well under a
 second. Both external edges (GitHub via `gh`, TickTick via HTTP) run against
-recorded fixtures in `skills/ticktick-integration/tests/fixtures/`.
+recorded fixtures in `skills/sync/tests/fixtures/`.
 
 ## The background job
 
-`skills/ticktick-integration/scripts/install_task.ps1` registers the `TickTickIntegration`
+`skills/sync/scripts/install_task.ps1` registers the `TickTickIntegration`
 scheduled task and writes `%LOCALAPPDATA%\ticktick-integration\launcher.pyw`.
 
 Two things about that launcher are load-bearing:
@@ -73,7 +73,7 @@ Two things about that launcher are load-bearing:
   wrapper flashes a black window every five minutes. `pythonw.exe` allocates no
   console at all.
 
-The launcher targets `skills/ticktick-integration/scripts/sync.py` under the resolved
+The launcher targets `skills/sync/scripts/sync.py` under the resolved
 version directory and raises `SystemExit`, naming the path, if it is not there --
 loudly, on purpose: this runs under `pythonw.exe` with no console and before
 `sync.py` has set up its own logging, so a silent failure on a path that moved

@@ -122,7 +122,7 @@ class LauncherPywCallsTheSharedResolutionFunctionTest(InstallTaskScriptTest):
 
 
 class LauncherTargetsTheNewEntryPointTest(InstallTaskScriptTest):
-    """sync.py moved from the plugin root to skills/ticktick-integration/scripts/ when
+    """sync.py moved from the plugin root to skills/sync/scripts/ when
     the repo adopted the skill layout. The generated launcher must
     follow it there -- and must not silently fall back to the old root path,
     which is exactly the kind of drift that would leave the 5-minute job
@@ -135,9 +135,9 @@ class LauncherTargetsTheNewEntryPointTest(InstallTaskScriptTest):
 
     def test_the_generated_launcher_targets_the_new_entry_point_path(self):
         body = self._launcher_body()
-        self.assertIn("skills/ticktick-integration/scripts/sync.py", body,
+        self.assertIn("skills/sync/scripts/sync.py", body,
                        "the generated launcher must resolve sync.py under the new "
-                       "skills/ticktick-integration/scripts/ location")
+                       "skills/sync/scripts/ location")
 
     def test_the_generated_launcher_does_not_reference_a_bare_root_sync_py(self):
         """The regression guard: no fallback to the pre-restructure path. A quoted

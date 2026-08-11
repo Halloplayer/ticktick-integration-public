@@ -1,4 +1,4 @@
-# skills/ticktick-integration/scripts/install_task.ps1
+# skills/sync/scripts/install_task.ps1
 # Registers the background job: every 5 minutes, no window.
 #
 # The task does not point at sync.py directly. It executes a stable Python
@@ -10,7 +10,7 @@
 # kept looking plausible.
 #
 # The SAME launcher is also what the ticktick-integration skill runs (see
-# skills/ticktick-integration/SKILL.md) -- that is the whole point of having it: a
+# skills/sync/SKILL.md) -- that is the whole point of having it: a
 # skill invocation resolves `${CLAUDE_PLUGIN_ROOT}` once, when the session
 # LOADED the plugin, so a plugin update during a long session leaves it
 # pointing at a stale version. The launcher has no such binding; it looks
@@ -31,7 +31,7 @@ $ErrorActionPreference = "Stop"
 $pythonw  = "C:\Program Files\Python311\pythonw.exe"
 $name     = "TickTickIntegration"
 $dataDir  = "$env:LOCALAPPDATA\ticktick-integration"
-# scripts/ sits three levels under the plugin root: skills/ticktick-integration/scripts.
+# scripts/ sits three levels under the plugin root: skills/sync/scripts.
 $repoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 
 if (-not (Test-Path $pythonw)) { throw "pythonw.exe not found: $pythonw" }
@@ -74,7 +74,7 @@ target = newest_version_dir(CACHE)
 # so a silent runpy.run_path() failure on a path that moved again would kill
 # the five-minute job with nothing anywhere, not even sync.log, to say why.
 # Fail loudly instead: name the exact path this looked for.
-entry = target / "skills/ticktick-integration/scripts/sync.py"
+entry = target / "skills/sync/scripts/sync.py"
 if not entry.is_file():
     raise SystemExit("sync.py not found at %s -- the plugin layout moved and "
                       "this launcher was not updated to match" % entry)

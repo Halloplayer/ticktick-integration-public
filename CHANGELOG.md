@@ -6,6 +6,17 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 Effort markers (`[~Xh]`) are deliberately absent: this repo was built before the
 convention existed, and back-filling them would mean inventing numbers.
 
+## [4.1.0]
+
+### Changed
+
+- The skill is named , not . Invoking it read
+  , which said the same word twice and
+  told the reader nothing the plugin name had not already said. It is now
+  , and its directory moved to  with the
+  launcher's entry point following it -- a path the background job resolves at run
+  time, so leaving it behind would have stopped the mirror silently.
+
 ## [4.0.0]
 
 ### Changed
