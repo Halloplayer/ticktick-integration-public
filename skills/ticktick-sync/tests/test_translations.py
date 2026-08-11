@@ -27,6 +27,18 @@ import github, models  # noqa: E402
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
 
+# The live translation cache of `globex/toolkit`, frozen as the
+# migration seed (see legacy/README.md). It used to sit at the plugin root --
+# which a plugin update replaces WHOLESALE, taking a user's hand-written
+# translations with it -- so on a migrated machine the cache actually read
+# lives in %LOCALAPPDATA%\ticktick-sync\repos\globex__toolkit\. This
+# reads the committed copy the migration hands over: the same bytes, and,
+# unlike a path in the data directory, present on every machine. A guard that
+# quietly skips itself is no guard.
+LIVE_TRANSLATIONS = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "legacy",
+    "issue-descriptions.toml")
+
 
 def _issue(number, body, title="T"):
     return {"number": number, "title": title, "url": "https://example.invalid/%d" % number,
@@ -146,7 +158,7 @@ class GuardTest(unittest.TestCase):
     def test_all_three_real_issues_resolve_to_a_cached_translation(self):
         with open(os.path.join(FIXTURES, "wiki_issues_11_12_14.json"), encoding="utf-8") as handle:
             issues = json.load(handle)
-        translations = github.load_translations()
+        translations = github.load_translations(LIVE_TRANSLATIONS)
 
         items = github.issues_to_items(issues, translations)
 
@@ -164,7 +176,7 @@ class GuardTest(unittest.TestCase):
         as the task's own name."""
         with open(os.path.join(FIXTURES, "wiki_issues_11_12_14.json"), encoding="utf-8") as handle:
             issues = json.load(handle)
-        translations = github.load_translations()
+        translations = github.load_translations(LIVE_TRANSLATIONS)
 
         items = github.issues_to_items(issues, translations)
 

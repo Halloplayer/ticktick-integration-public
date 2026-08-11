@@ -85,6 +85,14 @@ class SummaryLineTest(unittest.TestCase):
         # anywhere.
         with open(os.path.join(self.data_dir, ".env"), "w", encoding="utf-8") as handle:
             handle.write("TICKTICK_TOKEN=fake-token-for-tests\n")
+        # One configured repository, in the per-repo layout the mirror now
+        # discovers. `main([])` syncs everything it finds, so "everything" is
+        # exactly this one, and its state file sits beside its own config.
+        self.repo_dir = os.path.join(self.data_dir, "repos", "acme__widgets")
+        os.makedirs(self.repo_dir)
+        with open(os.path.join(self.repo_dir, "config.toml"), "w", encoding="utf-8") as handle:
+            handle.write('repo = "acme/widgets"\nitems_path = "open-items.toml"\n'
+                         'list_name = "Widgets"\n')
 
     def tearDown(self):
         if self._old_env is None:
@@ -116,7 +124,7 @@ class SummaryLineTest(unittest.TestCase):
         # the currently visible tasks -- exactly what happens when the user
         # ticks it off by hand while the source is still open. That is a
         # Reopen, not a Create.
-        state.save_state(os.path.join(self.data_dir, "state.json"),
+        state.save_state(os.path.join(self.repo_dir, "state.json"),
                          {"last_count": 1, "ids": {"gh-1": "t1"}})
         client = FakeClient(tasks={})
 

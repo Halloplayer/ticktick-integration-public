@@ -4,6 +4,13 @@ Mirrors the open work of a GitHub repo (open issues plus a neutral item list,
 `open-items.toml`) into a TickTick list. One-way and strict: the repo is
 always right, and TickTick is brought to match it, never the other way round.
 
+**Any number of repositories.** Each has its own TickTick list, its own
+configuration and its own state; one credential, one log and one scheduled task
+drive them all. Run the skill inside a repository that is not set up yet and it
+asks what it needs, resolves or creates the list, drops a neutral
+`open-items.toml` into the repo, and mirrors it alongside the others from then
+on.
+
 ## Install
 
 This is a **private** plugin in a private repository -- it is not listed on any
@@ -30,9 +37,9 @@ and [`CONTRIBUTING.md`](CONTRIBUTING.md).
    TICKTICK_API_KEY=<token>
    ```
    (`TICKTICK_TOKEN=` also works, if that name is already in use elsewhere.)
-2. The target TickTick list must already exist -- create it by hand once in
-   TickTick. The mirror never creates a list itself, only tasks inside one.
-3. Install the background job -- from the root of this repo:
+   One credential serves every mirrored repository -- it is one TickTick
+   account.
+2. Install the background job -- from the root of this repo:
    ```powershell
    powershell -ExecutionPolicy Bypass -File .\skills\ticktick-sync\scripts\install_task.ps1
    ```
@@ -51,6 +58,72 @@ and [`CONTRIBUTING.md`](CONTRIBUTING.md).
    hours on end. `pythonw.exe` never allocates a console at all, so there is
    no window to flash regardless of any hiding flag. Do not "simplify" this
    back to a PowerShell wrapper -- it would reintroduce exactly that.
+
+   ONE task drives every repository: it runs the launcher with no `--repo`,
+   which syncs all of them. Adding a repository never means adding a task.
+
+## Adding a repository
+
+Run the `ticktick-sync` skill inside the repository. It reads `git remote
+get-url origin`, confirms the repo with you, shows your existing TickTick lists
+so you can pick one (and offers to create one only if you say so), writes an
+`open-items.toml` into the repo if it has none, and mirrors it from then on.
+
+Everything the mirror knows lives in the data directory, keyed by the repo slug
+`<owner>__<repo>`:
+
+```
+%LOCALAPPDATA%\ticktick-sync\
+  .env                              shared credential
+  launcher.pyw                      shared
+  sync.log                          shared; every line prefixed with the slug
+  repos\
+    globex__toolkit\
+      config.toml                   repo, list_id, list_name, items_path
+      state.json                    key -> task id, last_count
+      issue-descriptions.toml       hand-written translations
+    acme__widgets\
+      ...
+```
+
+**Nothing configuration-shaped goes into the mirrored repository.** A fixed
+constraint of this project is that a mirrored repo must not learn the mirror
+exists, and a config file naming TickTick would break exactly that. The one
+exception is `open-items.toml`, which is neutral and never mentions TickTick or
+syncing.
+
+**Nothing lives at the plugin root either.** The plugin is a version-scoped
+cache directory that an update replaces wholesale -- `config.toml` and
+`issue-descriptions.toml` used to sit there, which meant a plugin update would
+have deleted a user's own configuration and hand-written translations without
+saying a word. The plugin ships code only.
+
+A slug is derived from a git remote, so it is not trusted: anything that is not
+a plain directory name -- a separator, a `..`, an absolute path -- is refused
+rather than turned into a path under the data directory.
+
+### The list must exist first
+
+The sync **never** creates a TickTick list. If the configured one is missing it
+stops and says so, because inventing a list would turn a loud, recoverable
+configuration mistake into a second, silently empty list beside the real one.
+Setup may create one -- once, only when you explicitly confirm it, through a
+separate function the sync path never calls. That API call is unverified
+(`POST /open/v1/tag` answers 500 on this API), so if it fails, setup tells you
+to create the list by hand and re-run, which resolves it by name.
+
+### Migrating the original single-repo installation
+
+The first run of the new layout on a machine that still has the old
+`%LOCALAPPDATA%\ticktick-sync\state.json` migrates itself: the state is copied
+**verbatim** into `repos\globex__toolkit\`, along with the frozen
+`legacy/config.toml` and `legacy/issue-descriptions.toml` the plugin ships for
+exactly this purpose, and the original is renamed to
+`state.json.pre-multi-repo` as a backup. It cannot run twice.
+
+Verbatim, not regenerated, because `state.json` carries `last_count` -- the
+number that ARMS the collapse guard. A fresh zero would disarm that guard for
+one run, on a live list.
 
 ## Tags, and the one rule about `#`
 
@@ -200,16 +273,24 @@ translation comes from.
 
 ```powershell
 $env:PYTHONIOENCODING="utf-8"; python skills\ticktick-sync\scripts\sync.py
+$env:PYTHONIOENCODING="utf-8"; python skills\ticktick-sync\scripts\sync.py --repo acme__widgets
 ```
 
-The output is one line: `ok desired=N created=A updated=U reopened=R completed=C`.
+With no `--repo` every configured repository is synced, one after another. The
+output is one line per repository:
+`<slug> ok desired=N created=A updated=U reopened=R completed=C`.
+
+A repository whose sync fails is caught, logged against its own slug and does
+not stop the others -- but the process still exits **non-zero** if any of them
+failed, so the Scheduled Task's result code keeps meaning something. An unknown
+`--repo` slug fails and names what is actually configured.
 
 ## Reading sync.log
 
-Every run -- scheduled or by hand -- appends one line to
-`%LOCALAPPDATA%\ticktick-sync\sync.log`, timestamped. A healthy line starts
-with `ok`; a failed run starts with `ERROR` and names the exception. Tail it
-to see the most recent runs:
+Every run -- scheduled or by hand -- appends one line per repository to
+`%LOCALAPPDATA%\ticktick-sync\sync.log`, timestamped and prefixed with the repo
+slug. A healthy line reads `<slug> ok ...`; a failed one reads `<slug> ERROR`
+and names the exception. Tail it to see the most recent runs:
 
 ```powershell
 Get-Content "$env:LOCALAPPDATA\ticktick-sync\sync.log" -Tail 10
@@ -230,8 +311,9 @@ closed, delete state.json and run again.
 
 nothing was changed in TickTick -- the guard refuses to empty a non-empty
 list on what looks like a read failure rather than real completions. Follow
-the message's own instruction: if everything really is closed, delete
-`%LOCALAPPDATA%\ticktick-sync\state.json` and run again.
+the message's own instruction: if everything really is closed, delete that
+repository's own `%LOCALAPPDATA%\ticktick-sync\repos\<slug>\state.json` and run
+again. Only that repository is affected; the others carry on.
 
 The guard only catches a fall to **zero**, which is why two other refusals
 exist upstream of it. Between them they cover the partial collapse it cannot
@@ -252,7 +334,8 @@ see:
 Task descriptions must always be English, but a GitHub issue's own body is
 German, and the sync has no LLM and no translation API -- either would break
 its determinism and its zero-dependency rule. So each issue's English
-description is translated by hand into `issue-descriptions.toml`, keyed by a
+description is translated by hand into that repository's own
+`repos\<slug>\issue-descriptions.toml`, keyed by a
 hash of the exact German excerpt it was translated from. Every run
 recomputes that hash and compares it: a match uses the cached English text; a
 mismatch, or no cached entry at all, falls back to the German excerpt itself,
@@ -289,7 +372,11 @@ item as missing both create it. Because tasks are matched by the marker in
 their description, only one of the twins is ever seen again; the other stays in
 the list forever, never updated and never completed.
 
-A run therefore takes `%LOCALAPPDATA%\ticktick-sync\sync.lock` first. A run
+A run therefore takes `%LOCALAPPDATA%\ticktick-sync\sync.lock` first. The lock
+is one for the whole process, not one per repository: a hand-run that syncs
+only `--repo x` still waits for a scheduled run that is halfway through `y`,
+which costs one skipped tick and removes any chance of two processes reaching
+the same repository at once. A run
 that finds it held logs
 
 ```

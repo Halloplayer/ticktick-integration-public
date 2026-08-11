@@ -8,7 +8,60 @@ convention existed, and back-filling them would mean inventing numbers.
 
 ## [Unreleased]
 
+### Added
+- **Conversational setup for a new repository**, driven by the rewritten
+  `SKILL.md` plus `skills/ticktick-sync/scripts/setup.py`. It derives the slug
+  from `git remote get-url origin` and has the user confirm it, reports whether
+  the repo is already configured, lists the account's existing TickTick lists
+  to pick from, writes `repos/<slug>/config.toml`, and creates a neutral
+  `open-items.toml` in the target repo if it has none -- never overwriting one,
+  and never mentioning TickTick in it, because a mirrored repo must not learn
+  the mirror exists.
+- **Setup, and only setup, may create a TickTick list** -- after an explicit
+  confirmation, through `ticktick.Client.create_list` / `repo_setup.ensure_list`,
+  which the sync path never calls (a structural test asserts `sync_core.py`,
+  `reconcile.py` and `sync.py` do not so much as name it). `resolve_list` still
+  refuses a missing list, unchanged. The API call is UNVERIFIED -- `POST /tag`
+  answers 500 on this API -- and is deliberately never probed speculatively,
+  because a half-successful probe would strand a list in a real account that
+  the API cannot delete again; any failure falls back to "create it by hand in
+  the app, then re-run setup", which resolves it by name.
+
 ### Changed
+- **The mirror serves any number of repositories, not one.** Per-repo data now
+  lives in the data directory keyed by the slug `<owner>__<repo>`
+  (`repos\<slug>\config.toml`, `state.json`, `issue-descriptions.toml`), with
+  `.env`, `launcher.pyw` and `sync.log` shared above it and every log line
+  prefixed with the slug it belongs to. `config.toml` and
+  `issue-descriptions.toml` are GONE from the plugin root, which closes a
+  latent bug quite apart from multi-repo: the plugin is a version-scoped cache
+  directory that an update replaces wholesale, so a user's own configuration
+  and hand-written translations were one update away from silent deletion. The
+  plugin ships code only; `legacy/` holds the frozen single-tenant files purely
+  as a one-shot migration seed and can be deleted once every installation has
+  migrated. `run_sync` is untouched and still syncs one repo against one
+  config; the new layer above it discovers `repos/*/config.toml` and runs each
+  in turn. A repo whose sync raises is caught, logged against its own slug and
+  does not stop the others -- but the process still exits non-zero if any
+  failed, so the Scheduled Task's result code keeps meaning something. One task
+  still drives everything: it runs the launcher with no `--repo`. New
+  `sync.py --repo <slug>` syncs exactly one, and an unknown slug fails naming
+  what is configured. Slugs come from `git remote get-url origin` and are not
+  trusted: a separator, a `..` or an absolute path is refused rather than
+  joined onto the data directory. Everything else is unchanged per repo -- the
+  collapse guard, the marker rule, the twelve-tag vocabulary, the three title
+  prefixes, the `#` sanitiser, hash-guarded translations, never touching
+  unmarked tasks, and never creating a list. 295 tests pass, zero skips.
+- **The live single-repo installation migrates itself, once.** On the first run
+  under the new layout, a `state.json` still sitting in the data directory is
+  copied VERBATIM into `repos\globex__toolkit\` together with the seed
+  config and translation cache, and the original is renamed
+  `state.json.pre-multi-repo` as a backup. Verbatim, not regenerated, because
+  `state.json` carries `last_count` -- the number that ARMS the collapse guard,
+  and a fresh zero would disarm it for exactly one run, on a live list of
+  seventeen real tasks. Guarded twice over so it cannot run again (the target's
+  own config, and the renamed original), and it refuses loudly rather than
+  leaving a half-migrated directory that discovery would silently ignore.
 - **The three title markers (`[Issue -> N]`, `[Issue Related -> N]`,
   `[Draft Related -> <title>]`) moved from a suffix to a prefix.** Same text,
   same brackets, same content -- only the position changed, on an explicit

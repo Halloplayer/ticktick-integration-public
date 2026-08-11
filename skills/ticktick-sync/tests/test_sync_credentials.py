@@ -59,6 +59,13 @@ class TokenTest(ReloadedSyncTest):
 
 class MainLogsCredentialFailureTest(ReloadedSyncTest):
     def test_a_missing_credential_is_logged_not_silently_dropped(self):
+        # One configured repository: a run that finds none has nothing to do
+        # and never reaches the credential, which is what is under test here.
+        repo_dir = os.path.join(self.data_dir, "repos", "acme__widgets")
+        os.makedirs(repo_dir)
+        with open(os.path.join(repo_dir, "config.toml"), "w", encoding="utf-8") as handle:
+            handle.write('repo = "acme/widgets"\nitems_path = "open-items.toml"\n'
+                         'list_name = "Widgets"\n')
         # The GitHub read is not under test here and must not touch the
         # network or call the real `gh`; it is stubbed to succeed so the run
         # reaches token(), which is the code path under test.

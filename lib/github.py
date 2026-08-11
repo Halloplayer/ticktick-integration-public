@@ -8,7 +8,6 @@ run then also sees what somebody else just pushed, without anyone calling
 import base64
 import hashlib
 import json
-import pathlib
 import re
 import subprocess
 import tomllib
@@ -94,24 +93,28 @@ def excerpt(text, limit=EXCERPT_LIMIT):
 # says, confidently, in the owner's own task list.
 UNTRANSLATED_PREFIX = "[untranslated] "
 
-# issue-descriptions.toml lives beside sync.py, at the root of THIS repo --
-# it is tooling for the mirror, not wiki content, so it does not belong in
-# the wiki repo being mirrored. github.py sits one package down, hence the
-# double .parent.
-TRANSLATIONS_PATH = pathlib.Path(__file__).resolve().parent.parent / "issue-descriptions.toml"
+# issue-descriptions.toml is PER REPOSITORY, and lives in that repository's own
+# data directory (`repos/<slug>/issue-descriptions.toml`). It used to sit at
+# the plugin root, which was always wrong: the plugin root is a version-scoped
+# cache directory that a plugin update replaces WHOLESALE, so a user's own
+# hand-written translations were one update away from deletion. It does not
+# belong in the mirrored repo either -- it is tooling for the mirror, not that
+# repo's content. Hence no default path here: the caller says which repo's
+# cache it means, and "this repo has none" is a legitimate answer.
 
 
-def load_translations(path=TRANSLATIONS_PATH):
+def load_translations(path=None):
     """number -> (source_sha256, description, title_sha256, title_en), read
-    from issue-descriptions.toml.
+    from one repository's issue-descriptions.toml.
 
     The sync has no LLM and no translation API -- either would break its
     determinism and its zero-dependency rule -- so translation happens out of
     band, by a human, and this file is the cache of that work. A missing file
-    is not a read failure: it behaves exactly like a present-but-empty cache,
-    and every issue falls back to its German excerpt (see
-    _translated_description) rather than aborting the run over a file whose
-    only job is a cosmetic one.
+    -- or `path=None`, the normal state of a newly set-up repository whose
+    issues nobody has translated -- is not a read failure: it behaves exactly
+    like a present-but-empty cache, and every issue falls back to its own
+    excerpt (see _translated_description) rather than aborting the run over a
+    file whose only job is a cosmetic one.
 
     `title_sha256`/`title_en` are optional per entry -- unlike `source_sha256`
     /`description`, which every entry has always carried. An issue not yet
@@ -119,6 +122,8 @@ def load_translations(path=TRANSLATIONS_PATH):
     `entry.get(...)` rather than `entry[...]` so an older or partial entry
     does not become a read failure over a cosmetic field.
     """
+    if path is None:
+        return {}
     try:
         with open(path, "rb") as handle:
             payload = tomllib.load(handle)
@@ -519,8 +524,12 @@ def _gh(args, run):
     return done.stdout
 
 
-def read_desired(config, run=subprocess.run):
-    """Both sources together. Any failure aborts -- never "nothing is open"."""
+def read_desired(config, run=subprocess.run, translations_path=None):
+    """Both sources together. Any failure aborts -- never "nothing is open".
+
+    `translations_path` points at THIS repository's translation cache (see
+    load_translations); each mirrored repo has its own, or none.
+    """
     ISSUE_LIMIT = 200
     raw_issues = _gh(["issue", "list", "--repo", config["repo"], "--state", "open",
                       "--limit", str(ISSUE_LIMIT), "--json",
@@ -540,6 +549,6 @@ def read_desired(config, run=subprocess.run):
     except (json.JSONDecodeError, KeyError, ValueError) as error:
         raise GitHubReadFailed("item list not readable: %s" % error)
 
-    desired = issues_to_items(issues, load_translations())
+    desired = issues_to_items(issues, load_translations(translations_path))
     desired.update(toml_to_items(text))
     return desired

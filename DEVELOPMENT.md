@@ -19,12 +19,18 @@ There are two ways to relate to this plugin — **do not confuse them**:
 lib/                  the engine — shared modules, flat, no package
 skills/ticktick-sync/
   SKILL.md            the manual trigger
-  scripts/            sync.py (entry point), install_task.ps1, probe.py
+  scripts/            sync.py (entry point), setup.py, install_task.ps1, probe.py
   tests/              the suite + recorded API fixtures
 docs/knowledge/       findings worth keeping (KB-*)
-config.toml           which repo, which list
-issue-descriptions.toml  hand-written English for German issue text
+legacy/               frozen single-tenant files — a one-shot migration seed only
 ```
+
+**No configuration ships with the code.** Which repositories are mirrored,
+which list each goes to, and every hand-written translation live per repository
+in `%LOCALAPPDATA%\ticktick-sync\repos\<owner>__<repo>\` — never here, because
+the version-scoped cache directory is replaced wholesale by an update and would
+take a user's own settings with it. `legacy/` is the sole exception and is not
+read at run time; see `legacy/README.md`.
 
 `lib/` is on `sys.path` at run time rather than pip-installed — the plugin runs
 straight out of the cache, where nothing is ever installed. `scripts/sync.py`

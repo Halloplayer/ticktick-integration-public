@@ -90,6 +90,31 @@ class Client:
             "there is no TickTick list named %r. Please create it once by hand "
             "-- this mirror never creates lists itself." % name)
 
+    def list_projects(self):
+        """[(id, name)] -- for setup, so a person can pick a list by sight."""
+        return [(project.get("id"), project.get("name"))
+                for project in (self._calls("GET", "/project") or [])]
+
+    def create_list(self, name):
+        """SETUP ONLY. Returns the new list's id, or None if the API refused.
+
+        The sync path must never reach this, and does not: `resolve_list`
+        above refuses a missing list instead, and neither `sync_core.py` nor
+        `sync.py` so much as names this method (a test asserts exactly that).
+        A mirror that created its own list would turn a configuration mistake
+        -- "there is no TickTick list named X", loud and recoverable -- into a
+        second, silently empty list in somebody's personal task manager, with
+        the real one still sitting untouched beside it.
+
+        Creating a list through the Open API is UNVERIFIED: `POST /tag`
+        answers 500 here, and this endpoint may do the same. It is never
+        probed speculatively -- a half-successful probe would strand a list in
+        a real account that the API cannot delete again -- so the only caller
+        is `setup.ensure_list`, reached on an explicit human confirmation and
+        falling back to a by-hand instruction when this yields nothing.
+        """
+        return (self._calls("POST", "/project", {"name": name}) or {}).get("id")
+
     def read_tasks(self, project_id):
         return tasks_from_payload(self._calls("GET", "/project/%s/data" % project_id) or {})
 
