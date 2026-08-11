@@ -44,6 +44,13 @@ class KeyTest(unittest.TestCase):
             models.item_key("prüfung")
         self.assertIn("prüfung", str(cm.exception))
 
+    def test_item_key_raises_for_trailing_newline(self):
+        """A trailing newline would break the marker round-trip. Regression
+        test for Python regex $-anchor matching before trailing newline."""
+        with self.assertRaises(ValueError) as cm:
+            models.item_key("abc\n")
+        self.assertIn("abc\n", str(cm.exception))
+
     def test_marker_and_key_from_body_round_trip_for_valid_ids(self):
         """The invariant that marker() and key_from_body() round-trip must hold
         for every id that item_key() accepts."""

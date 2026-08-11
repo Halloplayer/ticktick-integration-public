@@ -73,7 +73,7 @@ def issue_key(number):
 
 
 def item_key(item_id):
-    """Create an TickTick item key from its id, validating the character set.
+    """Create a TickTick item key from its id, validating the character set.
 
     Raises ValueError if the id contains any character not in KEY_CHARSET.
     A bad character would break the marker round-trip, making recovered keys
@@ -81,8 +81,9 @@ def item_key(item_id):
     different ids could slug to the same key and silently overwrite each
     other's tasks, which is worse than the bug being fixed.
     """
-    # Check that all characters in item_id are in the permitted set
-    if not re.match("^[" + KEY_CHARSET + "]+$", item_id):
+    # Check that all characters in item_id are in the permitted set.
+    # Use fullmatch to avoid Python's $ anchor exception for trailing newline.
+    if not re.fullmatch("[" + KEY_CHARSET + "]+", item_id):
         raise ValueError(
             f"Item id '{item_id}' contains characters not in permitted set "
             f"(allowed: alphanumeric, hyphen, dot, underscore)"
