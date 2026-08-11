@@ -26,7 +26,7 @@ version = 1
 id = "abgleich-modus-c"
 title = "abgleich — neues Werkzeug, das die erfassten Datenluecken als Entwuerfe im Bestand schliesst"
 status = "open"
-tags = ["Draft", "P1"]
+tags = ["Draft"]
 priority = "P1"
 source = "ISSUE-20240115090000"
 source_url = "https://github.com/globex/toolkit/blob/master/docs/issues/ISSUE-20240115090000_report-drafts.md"
@@ -220,7 +220,7 @@ class ItemFileTest(unittest.TestCase):
         self.assertLess(body.index("Source: ISSUE-20240115090000"), body.index("[sync:"))
 
     def test_the_tags_field_becomes_the_items_tags(self):
-        self.assertEqual({"draft", "p1"},
+        self.assertEqual({"draft"},
                          set(github.toml_to_items(ITEMS_TOML)["oi-abgleich-modus-c"].tags))
 
     def test_an_item_without_tags_has_none(self):
@@ -303,15 +303,23 @@ class ItemFileTest(unittest.TestCase):
 
 
 class TagScopeTest(unittest.TestCase):
-    """`Draft` and the priorities belong to ISSUES; the rest do not.
+    """Three disjoint cases, decided by where an entry came from.
 
-    An item is an issue draft exactly when it has a `source` -- the same test
-    that decides whether its name stays in the original language. From that
-    the vocabulary splits into two disjoint groups: {Draft, P0-P3} needs a
-    `source`, {Task, Clarification, Bug} needs the absence of one. Encoded as
-    a real check rather than a convention, because an unenforced rule drifts:
-    the file is hand-edited in a shared repo, and a wrong tag would quietly
-    produce a wrong list rather than failing.
+    1. A GitHub issue may carry `P0`-`P3` from its tracker label, or nothing.
+       Never `Draft`, never `Task`/`Clarification`/`Bug`.
+    2. An item WITH a `source` is an unpromoted issue draft: `Draft` alone.
+    3. An item WITHOUT a `source` carries exactly one of `Task`,
+       `Clarification`, `Bug`.
+
+    So **no priority tag may appear in the item file at all** -- that file
+    only ever holds non-issues and unpromoted drafts. A priority becomes real
+    when an issue is promoted to the tracker; a draft's frontmatter priority
+    is a proposal, and showing it as `P0` in the list would claim an agreement
+    that nobody has made. A priority tag therefore means "this is a real
+    tracker issue", which is exactly what makes it worth showing.
+
+    Enforced rather than documented: the file is hand-edited in a shared repo,
+    and a tag in the wrong case produces a wrong list rather than a failure.
     """
 
     def _toml(self, tags, source=True):
@@ -321,6 +329,23 @@ class TagScopeTest(unittest.TestCase):
             lines.append('source = "ISSUE-20240115090000"')
         return "\n".join(lines) + "\n"
 
+    def test_a_priority_on_a_draft_raises(self):
+        """An unpromoted draft has no agreed priority -- only a proposed one."""
+        for priority in ("P0", "P1", "P2", "P3"):
+            with self.assertRaises(github.GitHubReadFailed) as caught:
+                github.toml_to_items(self._toml(["Draft", priority]))
+
+            message = str(caught.exception)
+            self.assertIn("abgleich-modus-c", message)
+            self.assertIn(priority, message)
+
+    def test_a_priority_without_a_source_raises(self):
+        for priority in ("P0", "P1", "P2", "P3"):
+            with self.assertRaises(github.GitHubReadFailed) as caught:
+                github.toml_to_items(self._toml([priority], source=False))
+
+            self.assertIn(priority, str(caught.exception))
+
     def test_draft_without_a_source_raises_and_names_item_and_tag(self):
         with self.assertRaises(github.GitHubReadFailed) as caught:
             github.toml_to_items(self._toml(["Draft"], source=False))
@@ -329,40 +354,37 @@ class TagScopeTest(unittest.TestCase):
         self.assertIn("abgleich-modus-c", message)
         self.assertIn("Draft", message)
 
-    def test_a_priority_without_a_source_raises(self):
-        """P0-P3 are ISSUE priorities. Nothing violates this today; it is
-        encoded so nothing can start to."""
-        for priority in ("P0", "P1", "P2", "P3"):
-            with self.assertRaises(github.GitHubReadFailed) as caught:
-                github.toml_to_items(self._toml([priority], source=False))
-
-            self.assertIn(priority, str(caught.exception))
-
-    def test_a_non_issue_tag_beside_draft_raises(self):
-        for tag in ("Task", "Clarification", "Bug"):
+    def test_draft_alongside_any_other_tag_raises(self):
+        """`Draft` is the whole statement: this is an unpromoted issue."""
+        for tag in ("Task", "Clarification", "Bug", "P1"):
             with self.assertRaises(github.GitHubReadFailed) as caught:
                 github.toml_to_items(self._toml(["Draft", tag]))
+
+            self.assertIn("abgleich-modus-c", str(caught.exception))
+
+    def test_a_non_issue_tag_with_a_source_raises(self):
+        for tag in ("Task", "Clarification", "Bug"):
+            with self.assertRaises(github.GitHubReadFailed) as caught:
+                github.toml_to_items(self._toml([tag]))
 
             message = str(caught.exception)
             self.assertIn("abgleich-modus-c", message)
             self.assertIn(tag, message)
 
-    def test_a_non_issue_tag_beside_a_priority_raises(self):
-        for tag in ("Task", "Clarification", "Bug"):
-            with self.assertRaises(github.GitHubReadFailed) as caught:
-                github.toml_to_items(self._toml(["P1", tag]))
-
-            self.assertIn(tag, str(caught.exception))
-
-    def test_a_draft_may_carry_draft_and_a_priority_together(self):
-        """The legitimate combination -- most of the live file looks like
-        this."""
-        self.assertIn("oi-abgleich-modus-c", github.toml_to_items(self._toml(["Draft", "P0"])))
+    def test_a_draft_carries_draft_alone(self):
+        self.assertIn("oi-abgleich-modus-c", github.toml_to_items(self._toml(["Draft"])))
 
     def test_a_non_issue_item_may_carry_task_or_clarification_or_bug(self):
         for tag in ("Task", "Clarification", "Bug"):
             self.assertIn("oi-abgleich-modus-c",
                           github.toml_to_items(self._toml([tag], source=False)))
+
+    def test_the_issue_path_is_untouched_by_all_of_this(self):
+        """Case 1: a tracker label still becomes a tag. The restriction is on
+        the FILE, not on issues -- and this is the test that says the two did
+        not get conflated."""
+        self.assertEqual({"p1"}, set(github.issues_to_items(ISSUES)["gh-12"].tags))
+        self.assertEqual(frozenset(), github.issues_to_items(ISSUES)["gh-11"].tags)
 
 
 LIVE_ITEMS = os.path.join(os.path.dirname(os.path.abspath(__file__)),

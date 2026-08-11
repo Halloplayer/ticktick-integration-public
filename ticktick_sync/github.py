@@ -11,8 +11,8 @@ import re
 import subprocess
 import tomllib
 
-from .models import (ISSUE_ONLY_TAGS, NON_ISSUE_TAGS, Item, check_tag, issue_key,
-                     item_key, marker, tag_set)
+from .models import (DRAFT_TAG, NON_ISSUE_TAGS, PRIORITY_TAGS, Item, check_tag,
+                     issue_key, item_key, marker, tag_set)
 
 
 class GitHubReadFailed(Exception):
@@ -159,32 +159,43 @@ def _check_shape(payload):
 
 
 def _check_tag_scope(item_id, tags, is_draft):
-    """`Draft` and the priorities are ISSUE properties; the rest are not.
+    """Three disjoint cases; this enforces the two that live in the file.
 
-    An item is an issue draft exactly when it names a `source`. Both
-    directions are enforced, because the halves are disjoint: an item without
-    a source cannot be a `Draft` or carry a priority, and an item with one
-    cannot be a `Task`, `Bug` or `Clarification`.
+    An item is an unpromoted issue draft exactly when it names a `source`,
+    and then it carries `Draft` and nothing else. An item without a `source`
+    carries exactly one of Task, Bug, Clarification. A priority may never
+    appear here at all -- it belongs to a promoted tracker issue, and this
+    file holds only things that are not that.
 
-    A real check rather than a convention: the file is hand-edited in a shared
-    repo, and a tag in the wrong half would not break anything visibly -- it
-    would just quietly produce a wrong list, which is the kind of error nobody
-    goes looking for.
+    A real check rather than a convention: the file is hand-edited in a
+    shared repo, and a tag in the wrong case would not break anything
+    visibly -- it would quietly produce a wrong list, which is the kind of
+    error nobody goes looking for.
     """
     for tag in sorted(tags):
-        if tag in ISSUE_ONLY_TAGS and not is_draft:
+        if tag in PRIORITY_TAGS:
+            raise GitHubReadFailed(
+                "Item '%s' is tagged '%s', but a priority belongs to a PROMOTED issue "
+                "on the tracker. This file holds unpromoted drafts and work that is "
+                "not an issue at all; a priority proposed in a draft is not one that "
+                "has been agreed, and showing it would claim otherwise."
+                % (item_id, check_tag(tag)))
+        if tag == DRAFT_TAG and not is_draft:
             raise GitHubReadFailed(
                 "Item '%s' is tagged '%s', but it has no `source`, so it is not an "
-                "issue draft. `Draft` and the priorities P0-P3 say something about an "
-                "ISSUE; work that is not an issue takes Task, Bug or Clarification."
-                % (item_id, check_tag(tag)))
+                "issue draft. Work that is not an issue takes Task, Bug or "
+                "Clarification." % (item_id, check_tag(tag)))
         if tag in NON_ISSUE_TAGS and is_draft:
             raise GitHubReadFailed(
                 "Item '%s' is tagged '%s', but it names a `source`, which makes it an "
                 "issue draft. Task, Bug and Clarification describe work that is NOT an "
-                "issue, so they cannot sit beside `Draft` or a priority. Put the "
-                "substance in the description instead."
-                % (item_id, check_tag(tag)))
+                "issue, so they cannot sit beside `Draft`. Put the substance in the "
+                "description instead." % (item_id, check_tag(tag)))
+    if DRAFT_TAG in tags and len(tags) > 1:
+        raise GitHubReadFailed(
+            "Item '%s' is tagged 'Draft' together with %s. `Draft` is the whole "
+            "statement -- an unpromoted issue -- and takes no company."
+            % (item_id, ", ".join(sorted(check_tag(tag) for tag in tags if tag != DRAFT_TAG))))
 
 
 def toml_to_items(text):

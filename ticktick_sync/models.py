@@ -27,12 +27,20 @@ PERMITTED_TAGS = ("P0", "P1", "P2", "P3", "Draft", "Task", "Bug", "Clarification
 _CANONICAL = {tag.lower(): tag for tag in PERMITTED_TAGS}
 _ORDER = {tag.lower(): index for index, tag in enumerate(PERMITTED_TAGS)}
 
-# The vocabulary splits in two, and the halves are disjoint. `Draft` and the
-# priorities are properties of an ISSUE; the other three describe work that is
-# not an issue at all. An entry is an issue draft exactly when it names a
-# `source` -- the same test that decides whether its title keeps its original
-# language. github.py enforces both directions when reading the item file.
-ISSUE_ONLY_TAGS = frozenset({"draft", "p0", "p1", "p2", "p3"})
+# Three disjoint cases, decided by where an entry came from:
+#
+#   1. a GitHub issue          -- may carry a priority from its tracker label
+#   2. an item WITH a `source` -- an unpromoted issue draft: `Draft` alone
+#   3. an item without one     -- exactly one of Task, Bug, Clarification
+#
+# So a PRIORITY never appears in the item file at all: that file holds only
+# non-issues and unpromoted drafts. A priority becomes real when an issue is
+# promoted to the tracker; a draft's frontmatter priority is a proposal, and
+# showing it would claim an agreement nobody has made. A priority tag
+# therefore means "this is a real tracker issue" -- which is what makes it
+# worth showing. github.py enforces this when reading the item file.
+PRIORITY_TAGS = frozenset({"p0", "p1", "p2", "p3"})
+DRAFT_TAG = "draft"
 NON_ISSUE_TAGS = frozenset({"task", "bug", "clarification"})
 
 
