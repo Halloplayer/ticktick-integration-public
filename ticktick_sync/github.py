@@ -6,14 +6,16 @@ run then also sees what somebody else just pushed, without anyone calling
 `git fetch` here.
 """
 import base64
+import hashlib
 import json
+import pathlib
 import re
 import subprocess
 import tomllib
 
 from .models import (CLARIFICATION_TAG, DRAFT_TAG, NON_ISSUE_TAGS, PLAIN_PRIORITY_TAGS,
                      PRIORITY_TAGS, PROPOSED_PRIORITY_TAGS, Item, check_tag, issue_key,
-                     item_key, marker, tag_set)
+                     item_key, marker, sanitise, tag_set)
 
 
 class GitHubReadFailed(Exception):
@@ -84,6 +86,63 @@ def excerpt(text, limit=EXCERPT_LIMIT):
     return ""
 
 
+# Marks a description that could not be translated -- either no cached entry
+# exists for the issue, or the cached one no longer matches (the issue
+# changed upstream since somebody translated it by hand). Visible on purpose:
+# a silently stale translation would state something the source no longer
+# says, confidently, in the owner's own task list.
+UNTRANSLATED_PREFIX = "[untranslated] "
+
+# issue-descriptions.toml lives beside sync.py, at the root of THIS repo --
+# it is tooling for the mirror, not wiki content, so it does not belong in
+# the wiki repo being mirrored. github.py sits one package down, hence the
+# double .parent.
+TRANSLATIONS_PATH = pathlib.Path(__file__).resolve().parent.parent / "issue-descriptions.toml"
+
+
+def load_translations(path=TRANSLATIONS_PATH):
+    """number -> (source_sha256, description), read from issue-descriptions.toml.
+
+    The sync has no LLM and no translation API -- either would break its
+    determinism and its zero-dependency rule -- so translation happens out of
+    band, by a human, and this file is the cache of that work. A missing file
+    is not a read failure: it behaves exactly like a present-but-empty cache,
+    and every issue falls back to its German excerpt (see
+    _translated_description) rather than aborting the run over a file whose
+    only job is a cosmetic one.
+    """
+    try:
+        with open(path, "rb") as handle:
+            payload = tomllib.load(handle)
+    except FileNotFoundError:
+        return {}
+    return {entry["number"]: (entry["source_sha256"], entry["description"])
+            for entry in payload.get("issues", [])}
+
+
+def _translated_description(number, excerpt_text, translations):
+    """(description, is_untranslated) for one issue's excerpt.
+
+    Hashed AFTER sanitising -- the exact string that would otherwise have
+    reached TickTick -- so the fingerprint matches what a reader actually
+    sees, and a change to markup a reader never sees (rather than to the
+    words themselves) cannot falsely invalidate a good translation.
+
+    An issue with no excerpt at all (an empty body) has nothing to translate:
+    it is left as an empty description, exactly as before this cache
+    existed, rather than counted as "untranslated" for text that was never
+    there to translate.
+    """
+    sanitised = sanitise(excerpt_text) if excerpt_text else ""
+    if not sanitised:
+        return "", False
+    digest = hashlib.sha256(sanitised.encode("utf-8")).hexdigest()
+    cached = translations.get(number)
+    if cached is not None and cached[0] == digest:
+        return cached[1], False
+    return UNTRANSLATED_PREFIX + sanitised, True
+
+
 # Generous for a slow network, far below the 10-minute stale-lock threshold,
 # so a hang always resolves into a logged error before anything else reacts
 # to it. Without this, a hung `gh` under pythonw.exe is an invisible
@@ -97,7 +156,7 @@ def load_config(path):
         return tomllib.load(handle)
 
 
-def issues_to_items(payload):
+def issues_to_items(payload, translations=None):
     """The issue's own name, its own priority label, nothing added.
 
     The title is passed through exactly as GitHub returns it -- the issues are
@@ -107,23 +166,31 @@ def issues_to_items(payload):
     it annotates the name rather than displacing it.
 
     The description is an excerpt of the issue body, so the task says what it
-    is about without anything being opened. The marker comes last, because the
-    first line is what the app shows.
+    is about without anything being opened -- but a task's description must
+    always be English (see UNTRANSLATED_PREFIX / _translated_description),
+    while an issue body is German. `translations` is the cache read by
+    load_translations(); read_desired() always supplies it, so a description
+    reaching TickTick is either a hand-translated cache hit or a visibly
+    marked, counted fallback -- never a silent German excerpt. The marker
+    comes last, because the first line is what the app shows.
     """
+    translations = translations if translations is not None else {}
     items = {}
     for issue in payload:
         key = issue_key(issue["number"])
         labels = [label["name"] for label in issue.get("labels", [])]
         tags = tag_set(label for label in labels if label in PRIORITY_LABELS)
         parts = []
-        description = excerpt(issue.get("body"))
+        description, is_untranslated = _translated_description(
+            issue["number"], excerpt(issue.get("body")), translations)
         if description:
             parts += [description, ""]
         if issue.get("url"):
             parts.append("Source: %s" % issue["url"])
         parts.append(marker(key))
         title = "%s%s" % (issue["title"], ISSUE_SUFFIX % issue["number"])
-        items[key] = Item(key=key, title=title, body="\n".join(parts), tags=tags)
+        items[key] = Item(key=key, title=title, body="\n".join(parts), tags=tags,
+                          untranslated=is_untranslated)
     return items
 
 
@@ -401,6 +468,6 @@ def read_desired(config, run=subprocess.run):
     except (json.JSONDecodeError, KeyError, ValueError) as error:
         raise GitHubReadFailed("item list not readable: %s" % error)
 
-    desired = issues_to_items(issues)
+    desired = issues_to_items(issues, load_translations())
     desired.update(toml_to_items(text))
     return desired

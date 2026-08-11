@@ -125,6 +125,27 @@ class SummaryLineTest(unittest.TestCase):
         self.assertEqual(["gh-1"], client.updated)
         self.assertIn("reopened=1", printed)
 
+    def test_the_summary_line_carries_untranslated_when_above_zero(self):
+        """A GitHub-issue task whose German excerpt has no cached English
+        translation (or a stale one) is marked `Item.untranslated=True`. The
+        summary line -- sync.log's only report under pythonw.exe, where there
+        is no console -- must say so, or a translation cache going stale is
+        invisible."""
+        desired = {"gh-1": models.Item(key="gh-1", title="T gh-1", body=models.marker("gh-1"),
+                                       untranslated=True)}
+
+        exit_code, printed = self._run_main(desired, FakeClient())
+
+        self.assertEqual(0, exit_code)
+        self.assertIn("untranslated=1", printed)
+
+    def test_the_summary_line_omits_untranslated_when_zero(self):
+        """No noise on the common case: every real run has zero of these."""
+        exit_code, printed = self._run_main({"gh-1": item("gh-1")}, FakeClient())
+
+        self.assertEqual(0, exit_code)
+        self.assertNotIn("untranslated", printed)
+
 
 if __name__ == "__main__":
     unittest.main()

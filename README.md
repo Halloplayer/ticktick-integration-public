@@ -192,6 +192,21 @@ see:
   guard for that run. A **missing** `state.json` remains a legitimate fresh
   start; only an unreadable one refuses.
 
+## Issue descriptions are translated by hand
+
+Task descriptions must always be English, but a GitHub issue's own body is
+German, and the sync has no LLM and no translation API -- either would break
+its determinism and its zero-dependency rule. So each issue's English
+description is translated by hand into `issue-descriptions.toml`, keyed by a
+hash of the exact German excerpt it was translated from. Every run
+recomputes that hash and compares it: a match uses the cached English text; a
+mismatch, or no cached entry at all, falls back to the German excerpt itself,
+prefixed `[untranslated] ` and counted into the summary line's
+`untranslated=N`. Seeing `[untranslated]` on a task means the issue changed
+upstream since somebody translated it -- update the entry in
+`issue-descriptions.toml` (new excerpt, new hash, new translation) to clear
+it.
+
 ## Only one run at a time
 
 The scheduled task cannot overlap itself, but running the skill by hand starts

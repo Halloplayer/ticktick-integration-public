@@ -168,6 +168,14 @@ def main(argv=None):
 
     line = "ok desired=%d created=%d updated=%d reopened=%d completed=%d" % (
         len(desired), counts["created"], counts["updated"], counts["reopened"], counts["completed"])
+    # `translations` cannot itself translate -- see ticktick_sync/github.py --
+    # so an issue whose cached English went stale (or was never cached) shows
+    # up as German in the owner's own list. That must not be a silent
+    # approximation: the count surfaces it here, in the one line sync.log
+    # (and pythonw.exe's non-existent console) actually shows.
+    untranslated = sum(1 for entry in desired.values() if entry.untranslated)
+    if untranslated:
+        line += " untranslated=%d" % untranslated
     log(line)
     if not args.quiet:
         print("sync: " + line)

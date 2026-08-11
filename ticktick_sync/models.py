@@ -140,6 +140,14 @@ class Item:
     title: str
     body: str
     tags: frozenset = frozenset()
+    # True when this Item's body fell back to an untranslated German excerpt
+    # -- see ticktick_sync.github._translated_description(). Never set by
+    # anything other than the GitHub-issue mapper: open-items.toml entries
+    # are already hand-written in English. Carried on the Item itself (rather
+    # than as a side channel) so sync.py's summary line can count it straight
+    # off `desired`, without github.py having to thread a count back out
+    # through a second return value.
+    untranslated: bool = False
 
     def __post_init__(self):
         object.__setattr__(self, "title", sanitise(self.title))

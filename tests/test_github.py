@@ -74,11 +74,17 @@ class IssueMappingTest(unittest.TestCase):
     def test_the_body_opens_with_an_excerpt_of_the_issue_body(self):
         """Read cold on a phone, a task must say what it is about without
         opening anything. An excerpt is honest; a paraphrase invented by a
-        script is not, so nothing here summarises."""
+        script is not, so nothing here summarises.
+
+        No translations cache is passed here, so this fixture's excerpt --
+        which is not the real issue 12 body -- has no cached English and
+        opens `[untranslated] ` (see tests/test_translations.py for the
+        cache-hit/miss behaviour itself)."""
         body = github.issues_to_items(ISSUES)["gh-12"].body
 
-        self.assertTrue(body.startswith("Die Datensaetze im Archiv sind nicht geprueft."),
-                        "body starts: %r" % body[:80])
+        self.assertTrue(
+            body.startswith("[untranslated] Die Datensaetze im Archiv sind nicht geprueft."),
+            "body starts: %r" % body[:80])
 
     def test_the_first_meaningful_paragraph_skips_a_markdown_heading(self):
         """`## Problem` alone says nothing worth reading on a phone."""
