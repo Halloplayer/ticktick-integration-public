@@ -10,12 +10,13 @@ convention existed, and back-filling them would mean inventing numbers.
 
 ### Changed
 
-- The skill is named , not . Invoking it read
-  , which said the same word twice and
-  told the reader nothing the plugin name had not already said. It is now
-  , and its directory moved to  with the
-  launcher's entry point following it -- a path the background job resolves at run
-  time, so leaving it behind would have stopped the mirror silently.
+- The skill is named `sync`, not `ticktick-integration`. Invoking it read
+  `ticktick-integration:ticktick-integration` -- the same word twice, telling the
+  reader nothing the plugin name had not already said. It is now
+  `ticktick-integration:sync`, and its directory moved to `skills/sync/` with the
+  launcher's entry point following it. That path is resolved at run time by the
+  five-minute background job, so leaving it behind would have stopped the mirror
+  with no console to report it.
 
 ## [4.0.0]
 
