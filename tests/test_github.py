@@ -305,18 +305,18 @@ class ItemFileTest(unittest.TestCase):
 class TagScopeTest(unittest.TestCase):
     """Three disjoint cases, decided by where an entry came from.
 
-    1. A GitHub issue may carry `P0`-`P3` from its tracker label, or nothing.
-       Never `Draft`, never `Task`/`Clarification`/`Bug`.
-    2. An item WITH a `source` is an unpromoted issue draft: `Draft` alone.
-    3. An item WITHOUT a `source` carries exactly one of `Task`,
-       `Clarification`, `Bug`.
+    1. A GitHub issue -- `P0`-`P3` from its tracker label, or nothing. Never
+       `Draft`, never an underscore priority, never Task/Clarification/Bug.
+    2. An item WITH a `source` (an unpromoted draft) -- `Draft`, optionally
+       plus exactly one of `_P0`-`_P3`. Never a plain priority.
+    3. An item WITHOUT a `source` -- exactly one of Task, Clarification, Bug.
+       Never `Draft`, never a priority of either kind.
 
-    So **no priority tag may appear in the item file at all** -- that file
-    only ever holds non-issues and unpromoted drafts. A priority becomes real
-    when an issue is promoted to the tracker; a draft's frontmatter priority
-    is a proposal, and showing it as `P0` in the list would claim an agreement
-    that nobody has made. A priority tag therefore means "this is a real
-    tracker issue", which is exactly what makes it worth showing.
+    The underscore namespace is what makes case 2 possible. A draft's proposed
+    priority is real information and worth showing, but shown as a plain `P2`
+    it would claim an agreement nobody has made. `_P2` shows it AND labels it
+    as a proposal -- which is what lets a plain priority in the list always
+    mean "this is a promoted tracker issue".
 
     Enforced rather than documented: the file is hand-edited in a shared repo,
     and a tag in the wrong case produces a wrong list rather than a failure.
@@ -329,8 +329,9 @@ class TagScopeTest(unittest.TestCase):
             lines.append('source = "ISSUE-20240115090000"')
         return "\n".join(lines) + "\n"
 
-    def test_a_priority_on_a_draft_raises(self):
-        """An unpromoted draft has no agreed priority -- only a proposed one."""
+    def test_a_plain_priority_on_a_draft_raises(self):
+        """Narrowed from "any priority": `_P2` here is now legal, `P2` is not.
+        A plain priority on an unpromoted draft claims an agreed priority."""
         for priority in ("P0", "P1", "P2", "P3"):
             with self.assertRaises(github.GitHubReadFailed) as caught:
                 github.toml_to_items(self._toml(["Draft", priority]))
@@ -339,12 +340,43 @@ class TagScopeTest(unittest.TestCase):
             self.assertIn("abgleich-modus-c", message)
             self.assertIn(priority, message)
 
-    def test_a_priority_without_a_source_raises(self):
+    def test_a_plain_priority_without_a_source_raises(self):
         for priority in ("P0", "P1", "P2", "P3"):
             with self.assertRaises(github.GitHubReadFailed) as caught:
                 github.toml_to_items(self._toml([priority], source=False))
 
             self.assertIn(priority, str(caught.exception))
+
+    def test_a_proposed_priority_on_a_draft_is_accepted(self):
+        """The case the underscore namespace exists for."""
+        items = github.toml_to_items(self._toml(["Draft", "_P2"]))
+
+        self.assertEqual({"draft", "_p2"}, set(items["oi-abgleich-modus-c"].tags))
+
+    def test_a_proposed_priority_without_a_source_raises(self):
+        """Nothing without a source is a draft, so nothing there has a
+        proposed priority either."""
+        with self.assertRaises(github.GitHubReadFailed) as caught:
+            github.toml_to_items(self._toml(["_P2"], source=False))
+
+        message = str(caught.exception)
+        self.assertIn("abgleich-modus-c", message)
+        self.assertIn("_P2", message)
+
+    def test_a_proposed_priority_without_draft_raises(self):
+        """A proposed priority on nothing in particular says nothing."""
+        with self.assertRaises(github.GitHubReadFailed) as caught:
+            github.toml_to_items(self._toml(["_P2"]))
+
+        self.assertIn("_P2", str(caught.exception))
+
+    def test_two_priority_tags_on_one_item_raise(self):
+        """Either namespace, or one of each -- an item has at most one."""
+        for pair in (["_P1", "_P2"], ["P1", "P2"], ["_P1", "P2"]):
+            with self.assertRaises(github.GitHubReadFailed) as caught:
+                github.toml_to_items(self._toml(["Draft"] + pair))
+
+            self.assertIn("abgleich-modus-c", str(caught.exception))
 
     def test_draft_without_a_source_raises_and_names_item_and_tag(self):
         with self.assertRaises(github.GitHubReadFailed) as caught:
@@ -354,8 +386,8 @@ class TagScopeTest(unittest.TestCase):
         self.assertIn("abgleich-modus-c", message)
         self.assertIn("Draft", message)
 
-    def test_draft_alongside_any_other_tag_raises(self):
-        """`Draft` is the whole statement: this is an unpromoted issue."""
+    def test_draft_alongside_anything_but_a_proposed_priority_raises(self):
+        """Narrowed: `Draft` + `_P2` is the one legal pairing."""
         for tag in ("Task", "Clarification", "Bug", "P1"):
             with self.assertRaises(github.GitHubReadFailed) as caught:
                 github.toml_to_items(self._toml(["Draft", tag]))
@@ -371,8 +403,14 @@ class TagScopeTest(unittest.TestCase):
             self.assertIn("abgleich-modus-c", message)
             self.assertIn(tag, message)
 
-    def test_a_draft_carries_draft_alone(self):
+    def test_a_draft_may_carry_draft_alone(self):
+        """A draft whose own frontmatter proposes no priority."""
         self.assertIn("oi-abgleich-modus-c", github.toml_to_items(self._toml(["Draft"])))
+
+    def test_a_non_issue_item_may_not_carry_a_priority_of_either_kind(self):
+        for tag in ("P1", "_P1"):
+            with self.assertRaises(github.GitHubReadFailed):
+                github.toml_to_items(self._toml(["Task", tag], source=False))
 
     def test_a_non_issue_item_may_carry_task_or_clarification_or_bug(self):
         for tag in ("Task", "Clarification", "Bug"):

@@ -15,31 +15,39 @@ KEY_CHARSET = r"A-Za-z0-9._\-"
 MARKER_RE = re.compile(r"\[sync:([" + KEY_CHARSET + r"]+)\]")
 
 # The closed vocabulary. TickTick priorities are not used at all; a tag says
-# everything the mirror needs to say, and the owner colours these eight by hand
-# in the app. The order here is the display order.
+# everything the mirror needs to say, and the owner colours these twelve by
+# hand in the app. The order here is the display order.
+#
+# TWO priority namespaces, deliberately. A plain `P2` is an AGREED priority on
+# a promoted tracker issue. An underscored `_P2` is a PROPOSED one, taken from
+# the frontmatter of a draft that has not been promoted yet. Both are worth
+# seeing -- hiding the proposal throws away real information -- but showing a
+# proposal as plain `P2` would claim an agreement nobody has made. The
+# underscore keeps them apart, so a plain priority always means "promoted".
 #
 # Closed on purpose: `POST /tag` answers 500, so the Open API can neither
 # create, rename nor delete a tag. A typo would therefore leave permanent
 # litter in the owner's personal account that only they can clear. Better to
 # fail the run.
-PERMITTED_TAGS = ("P0", "P1", "P2", "P3", "Draft", "Task", "Bug", "Clarification")
+PERMITTED_TAGS = ("P0", "P1", "P2", "P3",
+                  "_P0", "_P1", "_P2", "_P3",
+                  "Draft", "Task", "Bug", "Clarification")
 
 _CANONICAL = {tag.lower(): tag for tag in PERMITTED_TAGS}
 _ORDER = {tag.lower(): index for index, tag in enumerate(PERMITTED_TAGS)}
 
 # Three disjoint cases, decided by where an entry came from:
 #
-#   1. a GitHub issue          -- may carry a priority from its tracker label
-#   2. an item WITH a `source` -- an unpromoted issue draft: `Draft` alone
+#   1. a GitHub issue          -- a plain priority from its tracker label
+#   2. an item WITH a `source` -- unpromoted draft: `Draft` (+ one `_P?`)
 #   3. an item without one     -- exactly one of Task, Bug, Clarification
 #
-# So a PRIORITY never appears in the item file at all: that file holds only
-# non-issues and unpromoted drafts. A priority becomes real when an issue is
-# promoted to the tracker; a draft's frontmatter priority is a proposal, and
-# showing it would claim an agreement nobody has made. A priority tag
-# therefore means "this is a real tracker issue" -- which is what makes it
-# worth showing. github.py enforces this when reading the item file.
-PRIORITY_TAGS = frozenset({"p0", "p1", "p2", "p3"})
+# So a PLAIN priority never appears in the item file at all: that file holds
+# only non-issues and unpromoted drafts, and neither has an agreed priority.
+# github.py enforces all of this when reading the item file.
+PLAIN_PRIORITY_TAGS = frozenset({"p0", "p1", "p2", "p3"})
+PROPOSED_PRIORITY_TAGS = frozenset({"_p0", "_p1", "_p2", "_p3"})
+PRIORITY_TAGS = PLAIN_PRIORITY_TAGS | PROPOSED_PRIORITY_TAGS
 DRAFT_TAG = "draft"
 NON_ISSUE_TAGS = frozenset({"task", "bug", "clarification"})
 

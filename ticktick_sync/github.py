@@ -11,8 +11,9 @@ import re
 import subprocess
 import tomllib
 
-from .models import (DRAFT_TAG, NON_ISSUE_TAGS, PRIORITY_TAGS, Item, check_tag,
-                     issue_key, item_key, marker, tag_set)
+from .models import (DRAFT_TAG, NON_ISSUE_TAGS, PLAIN_PRIORITY_TAGS, PRIORITY_TAGS,
+                     PROPOSED_PRIORITY_TAGS, Item, check_tag, issue_key, item_key,
+                     marker, tag_set)
 
 
 class GitHubReadFailed(Exception):
@@ -161,25 +162,48 @@ def _check_shape(payload):
 def _check_tag_scope(item_id, tags, is_draft):
     """Three disjoint cases; this enforces the two that live in the file.
 
-    An item is an unpromoted issue draft exactly when it names a `source`,
-    and then it carries `Draft` and nothing else. An item without a `source`
-    carries exactly one of Task, Bug, Clarification. A priority may never
-    appear here at all -- it belongs to a promoted tracker issue, and this
-    file holds only things that are not that.
+    An item is an unpromoted issue draft exactly when it names a `source`. It
+    then carries `Draft`, optionally beside ONE proposed priority (`_P0`-`_P3`)
+    taken from its own frontmatter. An item without a `source` carries exactly
+    one of Task, Bug, Clarification, and no priority of either kind.
+
+    A PLAIN priority never appears here: it states an AGREED priority on a
+    promoted tracker issue, and this file holds only things that are not that.
+    The underscore form exists so a draft's proposal can still be shown
+    without being read as the agreement.
 
     A real check rather than a convention: the file is hand-edited in a
     shared repo, and a tag in the wrong case would not break anything
     visibly -- it would quietly produce a wrong list, which is the kind of
     error nobody goes looking for.
     """
+    priorities = tags & PRIORITY_TAGS
+    if len(priorities) > 1:
+        raise GitHubReadFailed(
+            "Item '%s' carries %d priority tags (%s); an item has at most one."
+            % (item_id, len(priorities),
+               ", ".join(sorted(check_tag(tag) for tag in priorities))))
+
     for tag in sorted(tags):
-        if tag in PRIORITY_TAGS:
+        if tag in PLAIN_PRIORITY_TAGS:
             raise GitHubReadFailed(
-                "Item '%s' is tagged '%s', but a priority belongs to a PROMOTED issue "
-                "on the tracker. This file holds unpromoted drafts and work that is "
-                "not an issue at all; a priority proposed in a draft is not one that "
-                "has been agreed, and showing it would claim otherwise."
-                % (item_id, check_tag(tag)))
+                "Item '%s' is tagged '%s'. A plain priority states an AGREED priority "
+                "on a promoted tracker issue, and this file holds only unpromoted "
+                "drafts and work that is not an issue at all. For a draft's proposed "
+                "priority write '_%s' instead."
+                % (item_id, check_tag(tag), check_tag(tag)))
+        if tag in PROPOSED_PRIORITY_TAGS:
+            if not is_draft:
+                raise GitHubReadFailed(
+                    "Item '%s' is tagged '%s', but it has no `source`, so it is not a "
+                    "draft and has no proposed priority. Work that is not an issue "
+                    "takes Task, Bug or Clarification alone."
+                    % (item_id, check_tag(tag)))
+            if DRAFT_TAG not in tags:
+                raise GitHubReadFailed(
+                    "Item '%s' is tagged '%s' without `Draft`. A proposed priority "
+                    "qualifies a draft; on its own it says nothing."
+                    % (item_id, check_tag(tag)))
         if tag == DRAFT_TAG and not is_draft:
             raise GitHubReadFailed(
                 "Item '%s' is tagged '%s', but it has no `source`, so it is not an "
@@ -191,11 +215,18 @@ def _check_tag_scope(item_id, tags, is_draft):
                 "issue draft. Task, Bug and Clarification describe work that is NOT an "
                 "issue, so they cannot sit beside `Draft`. Put the substance in the "
                 "description instead." % (item_id, check_tag(tag)))
-    if DRAFT_TAG in tags and len(tags) > 1:
+    if DRAFT_TAG in tags:
+        company = tags - {DRAFT_TAG} - PROPOSED_PRIORITY_TAGS
+        if company:
+            raise GitHubReadFailed(
+                "Item '%s' is tagged 'Draft' together with %s. `Draft` takes no "
+                "company except one proposed priority (_P0-_P3)."
+                % (item_id, ", ".join(sorted(check_tag(tag) for tag in company))))
+    elif tags & NON_ISSUE_TAGS and len(tags) > 1:
         raise GitHubReadFailed(
-            "Item '%s' is tagged 'Draft' together with %s. `Draft` is the whole "
-            "statement -- an unpromoted issue -- and takes no company."
-            % (item_id, ", ".join(sorted(check_tag(tag) for tag in tags if tag != DRAFT_TAG))))
+            "Item '%s' carries %s; work that is not an issue takes exactly one of "
+            "Task, Bug or Clarification and nothing else."
+            % (item_id, ", ".join(sorted(check_tag(tag) for tag in tags))))
 
 
 def toml_to_items(text):

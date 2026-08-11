@@ -68,13 +68,27 @@ class KeyTest(unittest.TestCase):
 class TagTest(unittest.TestCase):
     """Tags replaced priorities entirely; the vocabulary is closed."""
 
-    def test_the_permitted_vocabulary_is_exactly_the_agreed_eight(self):
-        self.assertEqual({"P0", "P1", "P2", "P3", "Draft", "Task", "Bug", "Clarification"},
+    def test_the_permitted_vocabulary_is_exactly_the_agreed_twelve(self):
+        """Two priority namespaces, deliberately: a plain `P2` is an AGREED
+        priority on a real tracker issue, an underscored `_P2` a PROPOSED one
+        on something not yet promoted. Both stay visible, and neither can be
+        mistaken for the other."""
+        self.assertEqual({"P0", "P1", "P2", "P3",
+                          "_P0", "_P1", "_P2", "_P3",
+                          "Draft", "Task", "Bug", "Clarification"},
                          set(models.PERMITTED_TAGS))
 
     def test_a_permitted_tag_comes_back_in_its_canonical_spelling(self):
         self.assertEqual("Draft", models.check_tag("draft"))
         self.assertEqual("P1", models.check_tag("p1"))
+
+    def test_an_underscore_priority_keeps_its_underscore(self):
+        self.assertEqual("_P2", models.check_tag("_p2"))
+
+    def test_the_two_priority_namespaces_are_distinct_tags(self):
+        """`P2` and `_P2` must never normalise to the same thing -- the whole
+        point is that the list can carry both without ambiguity."""
+        self.assertNotEqual(models.tag_set(["P2"]), models.tag_set(["_P2"]))
 
     def test_a_tag_outside_the_vocabulary_raises(self):
         """A typo must fail loudly rather than quietly minting junk in the
