@@ -10,10 +10,13 @@ from ticktick_sync import github  # noqa: E402
 ISSUES = [
     {"number": 12, "title": "Pruefung der importierten Datensaetze",
      "url": "https://github.com/globex/toolkit/issues/12",
-     "labels": [{"name": "P1"}, {"name": "enhancement"}]},
+     "labels": [{"name": "P1"}, {"name": "enhancement"}],
+     "body": "## Problem\n\nDie Datensaetze im Archiv sind nicht geprueft. Siehe #11 "
+             "fuer den Kontext.\n\n## Vorschlag\n\nEin Feld pro Eintrag."},
     {"number": 11, "title": "Neues Werkzeug zur Berichterstellung",
      "url": "https://github.com/globex/toolkit/issues/11",
-     "labels": []},
+     "labels": [],
+     "body": ""},
 ]
 
 ITEMS_TOML = """
@@ -25,7 +28,8 @@ title = "abgleich: record list still missing"
 status = "open"
 tags = ["Draft", "Clarification"]
 priority = "P1"
-note = "Blocks review -> release."
+source = "ISSUE-20240115090000"
+description = "Blocks review -> release."
 
 [[items]]
 id = "datensatz-geprueft-feld"
@@ -33,6 +37,7 @@ title = "Structured checked-record provenance field"
 status = "open"
 tags = ["Clarification"]
 related = 12
+description = "May become unnecessary if issue 12 removes the ambiguity."
 
 [[items]]
 id = "already-done"
@@ -59,6 +64,37 @@ class IssueMappingTest(unittest.TestCase):
         self.assertIn("[sync:gh-12]", body)
         self.assertIn("https://github.com/globex/toolkit/issues/12", body)
 
+    def test_the_body_opens_with_an_excerpt_of_the_issue_body(self):
+        """Read cold on a phone, a task must say what it is about without
+        opening anything. An excerpt is honest; a paraphrase invented by a
+        script is not, so nothing here summarises."""
+        body = github.issues_to_items(ISSUES)["gh-12"].body
+
+        self.assertTrue(body.startswith("Die Datensaetze im Archiv sind nicht geprueft."),
+                        "body starts: %r" % body[:80])
+
+    def test_the_first_meaningful_paragraph_skips_a_markdown_heading(self):
+        """`## Problem` alone says nothing worth reading on a phone."""
+        self.assertNotIn("Problem", github.issues_to_items(ISSUES)["gh-12"].body)
+
+    def test_the_marker_comes_last_so_the_description_reads_first(self):
+        body = github.issues_to_items(ISSUES)["gh-12"].body
+
+        self.assertTrue(body.rstrip().endswith("[sync:gh-12]"), "body ends: %r" % body[-40:])
+
+    def test_the_url_is_labelled_as_the_source(self):
+        body = github.issues_to_items(ISSUES)["gh-12"].body
+
+        self.assertIn("Source: https://github.com/globex/toolkit/issues/12", body)
+
+    def test_an_issue_with_an_empty_body_still_yields_a_usable_task(self):
+        """Not every issue has prose. The task must still carry its source and
+        its marker rather than breaking."""
+        body = github.issues_to_items(ISSUES)["gh-11"].body
+
+        self.assertIn("[sync:gh-11]", body)
+        self.assertIn("Source: https://github.com/globex/toolkit/issues/11", body)
+
     def test_the_german_title_is_passed_through_verbatim(self):
         """The owner reads these on their phone as GitHub wrote them. Nothing
         here translates, trims or decorates an issue title."""
@@ -83,6 +119,66 @@ class IssueMappingTest(unittest.TestCase):
         self.assertEqual(frozenset(), github.issues_to_items(ISSUES)["gh-11"].tags)
 
 
+class ExcerptTest(unittest.TestCase):
+    """An issue body is long, markdown-shaped and written for a browser."""
+
+    def test_a_short_body_is_taken_whole(self):
+        self.assertEqual("Short and complete.", github.excerpt("Short and complete."))
+
+    def test_a_long_body_is_cut_at_a_sentence_boundary(self):
+        text = ("A. " * 120) + "trailing words that overflow the limit"
+        cut = github.excerpt(text)
+
+        self.assertLessEqual(len(cut), github.EXCERPT_LIMIT + 3)
+        self.assertTrue(cut.rstrip().endswith("."), "cut: %r" % cut[-40:])
+
+    def test_a_long_body_without_sentences_is_cut_at_a_word_boundary(self):
+        """Never mid-word: a truncated word reads like a bug."""
+        text = "wordy " * 100
+        cut = github.excerpt(text)
+
+        self.assertNotIn("wor ", cut)
+        self.assertNotIn("wordywordy", cut)
+        for piece in cut.replace("...", "").split():
+            self.assertEqual("wordy", piece)
+
+    def test_the_lines_of_one_paragraph_are_joined_into_running_text(self):
+        """Hard-wrapped markdown must not arrive as a column on a phone."""
+        self.assertEqual("one two three", github.excerpt("one two\nthree"))
+
+    def test_an_empty_body_yields_nothing_rather_than_failing(self):
+        self.assertEqual("", github.excerpt(""))
+        self.assertEqual("", github.excerpt(None))
+
+
+class GhFieldsTest(unittest.TestCase):
+    def test_the_issue_body_is_actually_requested_from_gh(self):
+        """Without `body` in the --json list the description silently stays
+        empty and every other test here would still pass."""
+        captured = []
+
+        class FakeResult:
+            def __init__(self, stdout):
+                self.returncode = 0
+                self.stderr = ""
+                self.stdout = stdout
+
+        def capturing(*args, **kwargs):
+            captured.append(args[0])
+            if "issue" in args[0]:
+                import json
+                return FakeResult(json.dumps([]))
+            import base64
+            import json
+            return FakeResult(json.dumps(
+                {"content": base64.b64encode(b"version = 1\nitems = []").decode()}))
+
+        github.read_desired({"repo": "x/y", "items_path": "open-items.toml"}, run=capturing)
+
+        issue_call = [args for args in captured if "issue" in args][0]
+        self.assertIn("body", issue_call[issue_call.index("--json") + 1])
+
+
 class ItemFileTest(unittest.TestCase):
     def test_an_open_item_becomes_an_item(self):
         self.assertIn("oi-abgleich-modus-c", github.toml_to_items(ITEMS_TOML))
@@ -91,9 +187,23 @@ class ItemFileTest(unittest.TestCase):
         """`done` means: it should no longer appear in the list."""
         self.assertNotIn("oi-already-done", github.toml_to_items(ITEMS_TOML))
 
-    def test_the_note_lands_in_the_body(self):
-        self.assertIn("Blocks review -> release.",
-                      github.toml_to_items(ITEMS_TOML)["oi-abgleich-modus-c"].body)
+    def test_the_description_opens_the_body(self):
+        """What the owner reads first on their phone."""
+        body = github.toml_to_items(ITEMS_TOML)["oi-abgleich-modus-c"].body
+
+        self.assertTrue(body.startswith("Blocks review -> release."), "body starts: %r" % body[:60])
+
+    def test_the_marker_comes_last(self):
+        body = github.toml_to_items(ITEMS_TOML)["oi-abgleich-modus-c"].body
+
+        self.assertTrue(body.rstrip().endswith("[sync:oi-abgleich-modus-c]"),
+                        "body ends: %r" % body[-40:])
+
+    def test_the_source_sits_between_description_and_marker(self):
+        body = github.toml_to_items(ITEMS_TOML)["oi-abgleich-modus-c"].body
+
+        self.assertLess(body.index("Blocks seal"), body.index("Source: ISSUE-20240115090000"))
+        self.assertLess(body.index("Source: ISSUE-20240115090000"), body.index("[sync:"))
 
     def test_the_tags_field_becomes_the_items_tags(self):
         self.assertEqual({"draft", "clarification"},
@@ -166,24 +276,33 @@ class HashFreeTest(unittest.TestCase):
             self.assertNotIn("#", item.title, "item %s title would create a tag" % key)
             self.assertNotIn("#", item.body, "item %s body would create a tag" % key)
 
-    def test_a_hash_in_an_item_title_raises_and_names_the_item(self):
+    def test_a_hash_in_an_item_title_is_sanitised_not_passed_on(self):
         text = 'version = 1\n\n[[items]]\nid = "abgleich-modus-c"\ntitle = "moot via #12"\n'
 
-        with self.assertRaises(github.GitHubReadFailed) as caught:
-            github.toml_to_items(text)
+        self.assertEqual("moot via issue 12",
+                         github.toml_to_items(text)["oi-abgleich-modus-c"].title)
 
-        self.assertIn("abgleich-modus-c", str(caught.exception))
-
-    def test_a_hash_in_an_item_note_raises_and_names_the_item(self):
-        """The note lands in the task's content, which TickTick scans just the
-        same. `moot via #12` must be written `moot via issue 12`."""
+    def test_a_hash_in_an_item_description_is_sanitised(self):
+        """The description lands in the task's content, which TickTick scans
+        just the same."""
         text = ('version = 1\n\n[[items]]\nid = "abgleich-modus-c"\ntitle = "T"\n'
-                'note = "PO decision, or moot via #12"\n')
+                'description = "PO decision, or moot via #12"\n')
 
-        with self.assertRaises(github.GitHubReadFailed) as caught:
-            github.toml_to_items(text)
+        body = github.toml_to_items(text)["oi-abgleich-modus-c"].body
 
-        self.assertIn("abgleich-modus-c", str(caught.exception))
+        self.assertIn("moot via issue 12", body)
+        self.assertNotIn("#", body)
+
+    def test_a_markdown_heading_in_an_issue_body_never_reaches_the_task(self):
+        """The sharpest case: issue bodies are full of `##` and `#12`, and now
+        that text goes into a description."""
+        issues = [{"number": 9, "title": "T", "url": "https://example.invalid/9",
+                   "labels": [], "body": "## Heading\n\nSee #7 for context."}]
+
+        item = github.issues_to_items(issues)["gh-9"]
+
+        self.assertNotIn("#", item.body)
+        self.assertIn("issue 7", item.body)
 
 
 class FileShapeTest(unittest.TestCase):

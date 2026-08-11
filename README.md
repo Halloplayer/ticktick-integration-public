@@ -39,12 +39,29 @@ outside the eight aborts the read and names the offender -- deliberately,
 because TickTick's API cannot delete a tag it creates, so a typo would leave
 litter only a human can clear from the app.
 
-**No `#` may appear in an item's title or note.** TickTick turns any `#token`
-in a task's text into a tag, so `moot via #12` would create a tag named `12`.
-Write `moot via issue 12` instead. An item that relates to an issue uses
-`related = 12`, which appends ` (issue 12 related)` to its title. A stray `#`
-fails the run rather than polluting the account. Issue titles are mirrored
-exactly as GitHub returns them, with no number prefix, for the same reason.
+**No `#` reaches TickTick.** TickTick turns any `#token` in a task's text into
+a tag, and its API cannot delete a tag again. So every title and body passes
+through one sanitiser (`models.sanitise`): `#12` becomes `issue 12`, any other
+`#` is dropped. Write `moot via issue 12` in the file anyway -- what you write
+is what you read. An item that relates to an issue uses `related = 12`, which
+appends ` (issue 12 related)` to its title. Issue titles are mirrored exactly
+as GitHub returns them, with no number prefix, for the same reason.
+
+## What a task says
+
+Each task opens with a short description, so it can be understood from a phone
+without opening anything:
+
+```
+<one to three sentences>
+
+Source: <ISSUE-... id, or the issue URL>
+[sync:<key>]
+```
+
+For items that text is the item's own `description` field -- one to three
+sentences, written to be read cold. For issues it is an excerpt of the issue
+body, never a generated summary.
 
 ## Running it by hand
 

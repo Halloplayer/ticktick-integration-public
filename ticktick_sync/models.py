@@ -69,13 +69,49 @@ def display_tags(tags):
             for tag in sorted(tags, key=lambda tag: (_ORDER.get(tag, len(_ORDER)), tag))]
 
 
+_ISSUE_REF = re.compile(r"#(\d+)")
+
+
+def sanitise(text):
+    """Strip the one character that must never reach TickTick: `#`.
+
+    TickTick makes a TAG out of any `#token` it finds in a task's text, and
+    `POST /tag` answers 500 -- so nothing here can delete what that creates.
+    The mirror's old `#12 ` title prefix had been quietly minting tags named
+    `12`, `11` and `14` in the owner's personal account, which only they could
+    clear, by hand, in the app.
+
+    A cross-reference is rewritten (`#12` -> `issue 12`) because it carries
+    meaning worth keeping; anything else is dropped, and the whitespace the
+    removal leaves behind is collapsed so a markdown heading does not arrive
+    indented. Line structure survives -- bodies are built line by line.
+
+    This is deliberately ONE function, called from Item.__post_init__ rather
+    than from each mapper: a chokepoint that has to be remembered is not a
+    chokepoint, and it must also protect sources nobody has written yet.
+    """
+    if not text:
+        return text
+    cleaned = _ISSUE_REF.sub(r"issue \1", text).replace("#", "")
+    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in cleaned.split("\n")]
+    return "\n".join(lines).strip()
+
+
 @dataclass(frozen=True)
 class Item:
-    """A desired entry, derived from either source."""
+    """A desired entry, derived from either source.
+
+    Every string that leaves for TickTick passes through sanitise() here, on
+    the way in -- see that function for why.
+    """
     key: str
     title: str
     body: str
     tags: frozenset = frozenset()
+
+    def __post_init__(self):
+        object.__setattr__(self, "title", sanitise(self.title))
+        object.__setattr__(self, "body", sanitise(self.body))
 
 
 @dataclass(frozen=True)

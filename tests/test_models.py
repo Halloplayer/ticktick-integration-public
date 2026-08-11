@@ -103,11 +103,59 @@ class TagTest(unittest.TestCase):
         self.assertFalse(hasattr(models, "PRIORITIES"))
 
 
+class SanitiseTest(unittest.TestCase):
+    """The single chokepoint for the one character that must never get out.
+
+    TickTick makes a TAG out of any `#token` in a task's text, and its API
+    cannot delete a tag again -- so a `#` reaching the account leaves litter
+    only the owner can clear by hand. Issue bodies are full of them (markdown
+    headings, cross-references) and now feed task descriptions, so the fix
+    belongs in ONE place rather than sprinkled over the mappers.
+    """
+
+    def test_a_cross_reference_becomes_readable_prose(self):
+        self.assertEqual("See issue 12 for context.", models.sanitise("See #12 for context."))
+
+    def test_a_markdown_heading_loses_its_hashes(self):
+        self.assertEqual("Problem", models.sanitise("## Problem"))
+
+    def test_a_trailing_hash_is_dropped_without_leaving_a_gap(self):
+        self.assertEqual("done", models.sanitise("done #"))
+
+    def test_a_lone_hash_between_words_collapses_the_whitespace_it_leaves(self):
+        self.assertEqual("before after", models.sanitise("before # after"))
+
+    def test_line_structure_survives(self):
+        """Bodies are built line by line; the sanitiser must not flatten them
+        into one paragraph."""
+        self.assertEqual("Source: x\n[sync:oi-a]",
+                         models.sanitise("Source: x\n[sync:oi-a]"))
+
+    def test_text_without_a_hash_is_returned_unchanged(self):
+        self.assertEqual("Pruefung der importierten Datensaetze",
+                         models.sanitise("Pruefung der importierten Datensaetze"))
+
+    def test_an_item_sanitises_itself_so_no_source_can_forget_to(self):
+        """A chokepoint that has to be remembered is not a chokepoint."""
+        item = models.Item(key="oi-a", title="moot via #12", body="see #7")
+
+        self.assertEqual("moot via issue 12", item.title)
+        self.assertEqual("see issue 7", item.body)
+
+
 class MarkerTest(unittest.TestCase):
     def test_a_body_carrying_a_marker_yields_its_key(self):
         body = models.marker("gh-12") + "\nhttps://example.invalid/12"
 
         self.assertEqual("gh-12", models.key_from_body(body))
+
+    def test_a_marker_at_the_very_end_of_a_body_is_still_found(self):
+        """The description now comes FIRST and the marker last, so that the
+        task reads well in the app. The whole recovery path depends on the
+        marker still being found there."""
+        body = "A sentence about the work.\n\nSource: ISSUE-1\n[sync:oi-a]"
+
+        self.assertEqual("oi-a", models.key_from_body(body))
 
     def test_a_body_without_a_marker_yields_none(self):
         self.assertIsNone(models.key_from_body("made by hand"))

@@ -7,6 +7,7 @@ run then also sees what somebody else just pushed, without anyone calling
 """
 import base64
 import json
+import re
 import subprocess
 import tomllib
 
@@ -21,13 +22,53 @@ class GitHubReadFailed(Exception):
 # tracker is somebody else's bookkeeping and would mint a junk tag.
 PRIORITY_LABELS = ("P0", "P1", "P2", "P3")
 
-# TickTick makes a TAG out of any `#token` it finds in a task's text. The
-# mirror's old `#<number> ` title prefix was therefore quietly creating tags
-# named `12`, `11`, `14` in the owner's personal account -- and `POST /tag`
-# answers 500, so nothing here can delete them again; only the owner can, by
-# hand, in the app. The one legitimate way to express a tag is the structured
-# `tags` field. So: no `#` in anything the mirror sends.
-FORBIDDEN_IN_TEXT = "#"
+# Nothing in this module removes `#` itself. Every string reaching TickTick is
+# cleaned once, in models.sanitise(), which Item applies to its own title and
+# body -- see there for why a `#` must never get out.
+
+# A task description is read on a phone, at a glance. Long enough to say what
+# the work is, short enough not to be a wall of text.
+EXCERPT_LIMIT = 280
+
+# Lines that carry no information once torn out of their markdown context.
+_FURNITURE = re.compile(r"^(#{1,6}\s|#{1,6}$|<!--|-->|[-*_]{3,}$|\|)")
+
+
+def _is_furniture(line):
+    return bool(_FURNITURE.match(line))
+
+
+def _trim(text, limit):
+    """Cut at a sentence boundary if there is a sensible one, else at a word.
+
+    Never mid-word: a truncated word reads like a bug rather than an excerpt.
+    """
+    if len(text) <= limit:
+        return text
+    window = text[:limit]
+    sentence = max(window.rfind(". "), window.rfind("! "), window.rfind("? "))
+    if sentence > limit // 2:
+        return window[:sentence + 1]
+    space = window.rfind(" ")
+    return (window[:space] if space > 0 else window) + "..."
+
+
+def excerpt(text, limit=EXCERPT_LIMIT):
+    """The first meaningful paragraph of an issue body, as running text.
+
+    An excerpt, never a summary: a paraphrase produced by a script claims an
+    understanding it does not have, and the owner cannot tell the two apart
+    from their phone. Headings, comment markers and rules are skipped because
+    `## Problem` on its own says nothing worth reading.
+    """
+    if not text:
+        return ""
+    for block in re.split(r"\n\s*\n", text.replace("\r\n", "\n")):
+        lines = [line.strip() for line in block.split("\n") if line.strip()]
+        meaningful = [line for line in lines if not _is_furniture(line)]
+        if meaningful:
+            return _trim(" ".join(meaningful), limit)
+    return ""
 
 
 # Generous for a slow network, far below the 10-minute stale-lock threshold,
@@ -49,16 +90,26 @@ def issues_to_items(payload):
     The title is passed through exactly as GitHub returns it -- the issues are
     German and stay German. It carries no `#<number> ` prefix either: that was
     this mirror's own invention and it was creating tags in the owner's
-    account (see FORBIDDEN_IN_TEXT). The number lives in the sync marker and
-    the URL in the body, which is where it was always actually needed.
+    account (see models.sanitise). The number lives in the sync marker and the
+    URL in the body, which is where it was always actually needed.
+
+    The description is an excerpt of the issue body, so the task says what it
+    is about without anything being opened. The marker comes last, because the
+    first line is what the app shows.
     """
     items = {}
     for issue in payload:
         key = issue_key(issue["number"])
         labels = [label["name"] for label in issue.get("labels", [])]
         tags = tag_set(label for label in labels if label in PRIORITY_LABELS)
-        body = "%s\n%s" % (marker(key), issue.get("url", ""))
-        items[key] = Item(key=key, title=issue["title"], body=body.strip(), tags=tags)
+        parts = []
+        description = excerpt(issue.get("body"))
+        if description:
+            parts += [description, ""]
+        if issue.get("url"):
+            parts.append("Source: %s" % issue["url"])
+        parts.append(marker(key))
+        items[key] = Item(key=key, title=issue["title"], body="\n".join(parts), tags=tags)
     return items
 
 
@@ -142,25 +193,19 @@ def toml_to_items(text):
             # create a tag named `12` in the owner's account.
             title = "%s (issue %d related)" % (title, related)
 
-        parts = [marker(key)]
-        if raw.get("note"):
-            parts.append(raw["note"])
+        # Description first, marker last: the app shows the opening lines, so
+        # that is where the explanation belongs. `note` stays supported for
+        # anything a contributor adds beside the description.
+        prose = [text for text in (raw.get("description"), raw.get("note")) if text]
+        trailer = []
         if raw.get("source"):
-            parts.append("Source: %s" % raw["source"])
+            trailer.append("Source: %s" % raw["source"])
         if raw.get("owner"):
-            parts.append("With: %s" % raw["owner"])
-        body = "\n".join(parts)
+            trailer.append("With: %s" % raw["owner"])
+        trailer.append(marker(key))
+        parts = prose + ([""] if prose else []) + trailer
 
-        for what, text in (("title", title), ("body", body)):
-            if FORBIDDEN_IN_TEXT in text:
-                raise GitHubReadFailed(
-                    "Item '%s' has a '%s' in its %s. TickTick turns any such "
-                    "token into a TAG in the owner's account, and its API "
-                    "cannot delete one again -- write 'issue 12' instead of "
-                    "'%s12'. Tags belong in the `tags` field."
-                    % (item_id, FORBIDDEN_IN_TEXT, what, FORBIDDEN_IN_TEXT))
-
-        items[key] = Item(key=key, title=title, body=body, tags=tags)
+        items[key] = Item(key=key, title=title, body="\n".join(parts), tags=tags)
     return items
 
 
@@ -182,7 +227,8 @@ def read_desired(config, run=subprocess.run):
     """Both sources together. Any failure aborts -- never "nothing is open"."""
     ISSUE_LIMIT = 200
     raw_issues = _gh(["issue", "list", "--repo", config["repo"], "--state", "open",
-                      "--limit", str(ISSUE_LIMIT), "--json", "number,title,url,labels"], run)
+                      "--limit", str(ISSUE_LIMIT), "--json",
+                      "number,title,url,labels,body"], run)
     try:
         issues = json.loads(raw_issues)
     except json.JSONDecodeError as error:
