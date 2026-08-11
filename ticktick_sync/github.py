@@ -42,9 +42,16 @@ def toml_to_items(text):
 
     items = {}
     for raw in payload.get("items", []):
-        if raw.get("status", "open") != "open":
+        status = raw.get("status", "open")
+        if status not in {"open", "done"}:
+            raise GitHubReadFailed("Item '%s' has invalid status '%s' (must be 'open' or 'done')" %
+                                 (raw.get("id", "?"), status))
+        if status != "open":
             continue
-        key = item_key(raw["id"])
+        try:
+            key = item_key(raw["id"])
+        except ValueError as error:
+            raise GitHubReadFailed(str(error)) from error
         parts = [marker(key)]
         if raw.get("note"):
             parts.append(raw["note"])
@@ -69,12 +76,17 @@ def _gh(args, run):
 
 def read_desired(config, run=subprocess.run):
     """Both sources together. Any failure aborts -- never "nothing is open"."""
+    ISSUE_LIMIT = 200
     raw_issues = _gh(["issue", "list", "--repo", config["repo"], "--state", "open",
-                      "--limit", "200", "--json", "number,title,url,labels"], run)
+                      "--limit", str(ISSUE_LIMIT), "--json", "number,title,url,labels"], run)
     try:
         issues = json.loads(raw_issues)
     except json.JSONDecodeError as error:
         raise GitHubReadFailed("gh returned no JSON: %s" % error)
+
+    if len(issues) == ISSUE_LIMIT:
+        raise GitHubReadFailed("Issue list hit the limit of %d; result cannot be trusted "
+                             "to be complete and is discarded" % ISSUE_LIMIT)
 
     raw_file = _gh(["api", "repos/%s/contents/%s" % (config["repo"], config["items_path"])], run)
     try:
