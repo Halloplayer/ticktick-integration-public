@@ -17,6 +17,14 @@ class GitHubReadFailed(Exception):
     """The desired state could not be read -- the run must abort."""
 
 
+# Generous for a slow network, far below the 10-minute stale-lock threshold,
+# so a hang always resolves into a logged error before anything else reacts
+# to it. Without this, a hung `gh` under pythonw.exe is an invisible
+# zombie -- it never completes, never logs, and the stale-lock logic lets
+# another run start every 10 minutes, which can hang the same way.
+GH_TIMEOUT_SECONDS = 60
+
+
 def load_config(path):
     with open(path, "rb") as handle:
         return tomllib.load(handle)
@@ -110,7 +118,11 @@ def toml_to_items(text):
 
 def _gh(args, run):
     try:
-        done = run(["gh"] + args, capture_output=True, text=True, encoding="utf-8")
+        done = run(["gh"] + args, capture_output=True, text=True, encoding="utf-8",
+                   timeout=GH_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        raise GitHubReadFailed("gh %s did not finish within %d seconds -- treating it as "
+                             "hung and aborting the run" % (" ".join(args), GH_TIMEOUT_SECONDS))
     except OSError as error:
         raise GitHubReadFailed("could not start gh: %s" % error)
     if done.returncode != 0:

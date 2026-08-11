@@ -268,5 +268,63 @@ class UntestableBranchesTest(unittest.TestCase):
                               run=fake_run)
 
 
+class GhTimeoutTest(unittest.TestCase):
+    """A hung `gh` under pythonw.exe is an invisible zombie: it never
+    completes, never logs, and the stale-lock logic lets another run start
+    every 10 minutes, which can hang the same way. A bounded timeout turns
+    that silent accumulation into a single logged failure."""
+
+    def test_a_hung_gh_call_raises_github_read_failed_not_timeout_expired(self):
+        """The load-bearing case: a hang must reach the logged failure path
+        instead of escaping as an unhandled TimeoutExpired."""
+        import subprocess
+
+        def hanging(*args, **kwargs):
+            raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs.get("timeout"))
+
+        with self.assertRaises(github.GitHubReadFailed):
+            github.read_desired({"repo": "x/y", "items_path": "open-items.toml"}, run=hanging)
+
+    def test_the_error_names_the_timeout_value(self):
+        """Someone reading sync.log at 8am should learn what happened, not
+        just that something did."""
+        import subprocess
+
+        def hanging(*args, **kwargs):
+            raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs.get("timeout"))
+
+        with self.assertRaises(github.GitHubReadFailed) as caught:
+            github.read_desired({"repo": "x/y", "items_path": "open-items.toml"}, run=hanging)
+
+        self.assertIn(str(github.GH_TIMEOUT_SECONDS), str(caught.exception))
+
+    def test_the_timeout_is_actually_passed_to_run(self):
+        """Without this, someone could later delete the argument and every
+        other test here would still pass."""
+        captured = []
+
+        class FakeResult:
+            def __init__(self, stdout):
+                self.returncode = 0
+                self.stderr = ""
+                self.stdout = stdout
+
+        def capturing(*args, **kwargs):
+            captured.append(kwargs)
+            if "issue" in args[0]:
+                import json
+                return FakeResult(json.dumps([]))
+            import json
+            import base64
+            return FakeResult(json.dumps({"content": base64.b64encode(b"version = 1\nitems = []").decode()}))
+
+        github.read_desired({"repo": "x/y", "items_path": "open-items.toml"}, run=capturing)
+
+        self.assertTrue(captured, "run() was never called")
+        for kwargs in captured:
+            self.assertIn("timeout", kwargs)
+            self.assertEqual(github.GH_TIMEOUT_SECONDS, kwargs["timeout"])
+
+
 if __name__ == "__main__":
     unittest.main()
