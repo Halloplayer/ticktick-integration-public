@@ -22,16 +22,25 @@ LOG = DATA / "sync.log"
 LOG_MAX = 1_000_000
 
 
+class ConfigError(Exception):
+    """A bad or missing local setup -- distinct from SystemExit, which is a
+    BaseException and would silently slip past main()'s `except Exception`.
+    Under pythonw.exe there is no console and sync.log is the only channel
+    that exists, so a credential problem MUST be catchable and logged rather
+    than escaping unnoticed while the mirror quietly goes stale.
+    """
+
+
 def token():
     env = DATA / ".env"
     if not env.is_file():
-        raise SystemExit("no .env in %s -- put the token there (TICKTICK_TOKEN=...)" % DATA)
+        raise ConfigError("no .env in %s -- put the token there (TICKTICK_TOKEN=...)" % DATA)
     for line in env.read_text(encoding="utf-8").splitlines():
         # The user's file uses TICKTICK_API_KEY; accept both names rather than
         # making them re-edit a working secret to match our preference.
         if line.split("=")[0].strip() in ("TICKTICK_TOKEN", "TICKTICK_API_KEY"):
             return line.split("=", 1)[1].strip()
-    raise SystemExit("no TICKTICK_TOKEN or TICKTICK_API_KEY in %s" % env)
+    raise ConfigError("no TICKTICK_TOKEN or TICKTICK_API_KEY in %s" % env)
 
 
 def log(line):
