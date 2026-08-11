@@ -15,7 +15,7 @@ once, when this session loaded the plugin -- after an in-session
 `claude plugin update` it still points at the OLD version, silently. Run the
 stable launcher instead: it resolves the newest cached plugin version at run
 time, every time, so it cannot go stale mid-session. It is the same launcher
-the 5-minute background task uses (see `tools/install_task.ps1`).
+the 5-minute background task uses (see `scripts/install_task.ps1`).
 
 ```bash
 PYTHONIOENCODING=utf-8 python "$LOCALAPPDATA/ticktick-sync/launcher.pyw"

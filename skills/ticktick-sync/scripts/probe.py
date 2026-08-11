@@ -1,4 +1,4 @@
-# tools/probe.py
+# skills/ticktick-sync/scripts/probe.py
 """Ask the live TickTick API what it actually supports, and record the answers.
 
 Nothing here is designed against a guessed endpoint. Throwaway in spirit but
@@ -143,7 +143,7 @@ def measure_whole_object_replace(pid):
     tid = created["id"]
     print("dueDate as created:", (created or {}).get("dueDate"))
 
-    # Exactly the payload ticktick_sync/ticktick.py Client.update() sends.
+    # Exactly the payload lib/ticktick.py Client.update() sends.
     status, updated = call("POST", "/task/%s" % tid, {
         "id": tid, "projectId": pid, "title": "probe task 2 (due date) edited",
         "content": "[sync:probe-2] edited", "priority": 5, "status": 0})

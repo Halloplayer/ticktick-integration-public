@@ -4,7 +4,7 @@ The sync has no LLM and no translation API -- adding either would break its
 determinism and its zero-dependency rule -- so an issue's English description
 is translated by hand, out of band, and cached in issue-descriptions.toml,
 fingerprinted by a hash of the exact excerpt it was translated from.
-ticktick_sync.github recomputes that hash for every open issue on every run:
+lib.github recomputes that hash for every open issue on every run:
 
 - a matching hash uses the cached English text
 - a differing hash, or no entry at all, falls back to the German excerpt,
@@ -20,9 +20,10 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "lib"))
 
-from ticktick_sync import github, models  # noqa: E402
+import github, models  # noqa: E402
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
 

@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+#
+# pre-push hook -- blocks direct pushes to the protected branch.
+#
+# Rationale: master == published plugin. Consumers pull master's HEAD via
+# autoUpdate, so every push to master is immediately distributed to everyone
+# and becomes what their 5-minute background job runs next tick. Changes go
+# through a branch + PR (see CONTRIBUTING.md).
+#
+# Enable once per clone:  python .githooks/setup.py
+# Override (use sparingly): git push --no-verify
+
+# --- CURRENTLY DEACTIVATED --------------------------------------------------
+# Carried over deactivated from globex-toolkit, whose own main-protection block
+# is commented out while it is evaluated whether the PR gate is worth it for a
+# one-maintainer repo. Direct push to master is therefore allowed (no
+# --no-verify needed). To activate, uncomment the block below.
+#
+# The protected branch here is `master`, not `main` -- activating this with
+# `main` would protect a branch this repo does not have, i.e. nothing at all.
+# Server-side branch protection is not an alternative: private repo on the
+# free plan -> HTTP 403.
+#
+# protected_branch="master"
+#
+# while read -r local_ref local_sha remote_ref remote_sha; do
+# 	if [ "$remote_ref" = "refs/heads/$protected_branch" ]; then
+# 		echo "" >&2
+# 		echo "x Direct push to '$protected_branch' is blocked." >&2
+# 		echo "  master = published plugin; changes go through a branch + PR." >&2
+# 		echo "  See CONTRIBUTING.md. Override (sparingly): git push --no-verify" >&2
+# 		echo "" >&2
+# 		exit 1
+# 	fi
+# done
+# ---------------------------------------------------------------------------
+
+exit 0

@@ -18,11 +18,12 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "lib"))
 
-from ticktick_sync.launcher_support import newest_version_dir  # noqa: E402
+from launcher_support import newest_version_dir  # noqa: E402
 
-SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools", "install_task.ps1")
+SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts", "install_task.ps1")
 
 
 class InstallTaskScriptTest(unittest.TestCase):
@@ -105,7 +106,7 @@ class LauncherPywCallsTheSharedResolutionFunctionTest(InstallTaskScriptTest):
         body = self._launcher_body()
         self.assertIn("newest_version_dir", body,
                        "the generated launcher must call the same resolution function that is "
-                       "unit-tested in ticktick_sync/launcher_support.py, not reimplement it")
+                       "unit-tested in lib/launcher_support.py, not reimplement it")
 
     def test_the_generated_launcher_does_not_reimplement_the_numeric_parsing(self):
         body = self._launcher_body()
@@ -118,6 +119,41 @@ class LauncherPywCallsTheSharedResolutionFunctionTest(InstallTaskScriptTest):
         self.assertIn("launcher_support.py", self.text,
                        "the installer must place launcher_support.py in the data directory so the "
                        "generated launcher.pyw can import it at run time")
+
+
+class LauncherTargetsTheNewEntryPointTest(InstallTaskScriptTest):
+    """sync.py moved from the plugin root to skills/ticktick-sync/scripts/ when
+    the repo adopted the skill layout. The generated launcher must
+    follow it there -- and must not silently fall back to the old root path,
+    which is exactly the kind of drift that would leave the 5-minute job
+    dying quietly on a path that no longer exists."""
+
+    def _launcher_body(self):
+        match = re.search(r"\$launcher = @'\r?\n(.*?)\r?\n'@", self.text, re.DOTALL)
+        self.assertIsNotNone(match, "install_task.ps1 must define $launcher as a here-string")
+        return match.group(1)
+
+    def test_the_generated_launcher_targets_the_new_entry_point_path(self):
+        body = self._launcher_body()
+        self.assertIn("skills/ticktick-sync/scripts/sync.py", body,
+                       "the generated launcher must resolve sync.py under the new "
+                       "skills/ticktick-sync/scripts/ location")
+
+    def test_the_generated_launcher_does_not_reference_a_bare_root_sync_py(self):
+        """The regression guard: no fallback to the pre-restructure path. A quoted
+        bare 'sync.py' (not prefixed by its scripts/ directory) is exactly what a
+        reintroduced old-layout fallback would look like."""
+        body = self._launcher_body()
+        self.assertNotRegex(body, r'["\']sync\.py["\']',
+                             "the launcher must not reference a bare <root>/sync.py -- "
+                             "that path no longer exists after the restructure")
+
+    def test_the_generated_launcher_raises_loudly_when_sync_py_is_absent(self):
+        body = self._launcher_body()
+        self.assertIn("raise SystemExit", body,
+                       "a missing sync.py must fail loudly, not disappear silently under "
+                       "pythonw.exe where there is no console and logging is not set up yet")
+        self.assertIn("entry", body)
 
 
 if __name__ == "__main__":

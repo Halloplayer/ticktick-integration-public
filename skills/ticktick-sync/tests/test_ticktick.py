@@ -3,10 +3,11 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "lib"))
 
-from ticktick_sync import models, ticktick  # noqa: E402
-from ticktick_sync.models import marker  # noqa: E402
+import models, ticktick  # noqa: E402
+from models import marker  # noqa: E402
 
 PROJECT_DATA = {
     "project": {"id": "p1", "name": "globex-toolkit"},

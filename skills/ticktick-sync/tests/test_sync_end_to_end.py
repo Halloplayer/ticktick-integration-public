@@ -4,9 +4,10 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "lib"))
 
-from ticktick_sync import models, state, sync_core, ticktick  # noqa: E402
+import models, state, sync_core, ticktick  # noqa: E402
 
 
 class FakeClient:

@@ -7,10 +7,11 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "lib"))
 
-from ticktick_sync import github, models  # noqa: E402
-from ticktick_sync.reconcile import CollapseRefused, guard_collapse  # noqa: E402
+import github, models  # noqa: E402
+from reconcile import CollapseRefused, guard_collapse  # noqa: E402
 
 
 def item(key):

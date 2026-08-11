@@ -3,7 +3,7 @@
 One rule: the list shows what the repo says. Tick a task off by hand while the
 source is still open and you get it back.
 """
-from .models import Complete, Create, Reopen, Update
+from models import Complete, Create, Reopen, Update
 
 
 def reconcile(desired, current, known_ids=None):

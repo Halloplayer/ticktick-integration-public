@@ -10,13 +10,21 @@ import pathlib
 import sys
 import time
 
-from ticktick_sync import github, ticktick
-from ticktick_sync.sync_core import run_sync
-
-# Code and data live apart on purpose. HERE is the plugin folder in the cache
-# -- version-scoped, and an update replaces it wholesale. Everything mutable
-# therefore belongs in DATA, which survives updates.
+# Code and data live apart on purpose. HERE is this script's folder inside the
+# plugin cache and ROOT the plugin root above it -- both version-scoped, and an
+# update replaces them wholesale. Everything mutable therefore belongs in DATA,
+# which survives updates.
 HERE = pathlib.Path(__file__).resolve().parent
+ROOT = HERE.parent.parent.parent
+
+# The engine modules are shared helpers under the plugin root, reached by path
+# rather than as an installed package -- the plugin is run straight out of the
+# cache, where nothing is ever pip-installed.
+sys.path.insert(0, str(ROOT / "lib"))
+
+import github  # noqa: E402
+import ticktick  # noqa: E402
+from sync_core import run_sync  # noqa: E402
 
 
 def data_dir():
@@ -134,7 +142,7 @@ def release_lock(handle):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Mirrors open work into TickTick.")
-    parser.add_argument("--config", default=str(HERE / "config.toml"))
+    parser.add_argument("--config", default=str(ROOT / "config.toml"))
     parser.add_argument("--quiet", action="store_true", help="log only, no stdout")
     args = parser.parse_args(argv)
 
@@ -168,7 +176,7 @@ def main(argv=None):
 
     line = "ok desired=%d created=%d updated=%d reopened=%d completed=%d" % (
         len(desired), counts["created"], counts["updated"], counts["reopened"], counts["completed"])
-    # `translations` cannot itself translate -- see ticktick_sync/github.py --
+    # `translations` cannot itself translate -- see lib/github.py --
     # so an issue whose cached English went stale (or was never cached) shows
     # up as German in the owner's own list. That must not be a silent
     # approximation: the count surfaces it here, in the one line sync.log

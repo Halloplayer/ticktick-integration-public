@@ -1,4 +1,4 @@
-# tools/install_task.ps1
+# skills/ticktick-sync/scripts/install_task.ps1
 # Registers the background job: every 5 minutes, no window.
 #
 # The task does not point at sync.py directly. It executes a stable Python
@@ -31,19 +31,20 @@ $ErrorActionPreference = "Stop"
 $pythonw  = "C:\Program Files\Python311\pythonw.exe"
 $name     = "TickTickSync"
 $dataDir  = "$env:LOCALAPPDATA\ticktick-sync"
-$repoRoot = Split-Path -Parent $PSScriptRoot
+# scripts/ sits three levels under the plugin root: skills/ticktick-sync/scripts.
+$repoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 
 if (-not (Test-Path $pythonw)) { throw "pythonw.exe not found: $pythonw" }
 
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 
 # The numeric-vs-lexical version comparison (0.10.0 must beat 0.9.0 -- a
-# lexical sort gets that backwards) lives in ticktick_sync/launcher_support.py,
-# tested like everything else in the package. Stage a copy in the data
-# directory -- not version-scoped, so it survives a plugin update exactly
-# like launcher.pyw itself -- and the launcher imports it from there instead
-# of reimplementing it.
-Copy-Item -Path (Join-Path $repoRoot "ticktick_sync\launcher_support.py") `
+# lexical sort gets that backwards) lives in lib/launcher_support.py, tested
+# like everything else. Stage a copy in the data directory -- not
+# version-scoped, so it survives a plugin update exactly like launcher.pyw
+# itself -- and the launcher imports it from there instead of reimplementing
+# it.
+Copy-Item -Path (Join-Path $repoRoot "lib\launcher_support.py") `
     -Destination "$dataDir\launcher_support.py" -Force
 
 # A stable launcher in the data directory that finds the newest cached version
@@ -65,9 +66,22 @@ from launcher_support import newest_version_dir
 
 CACHE = pathlib.Path(os.environ["USERPROFILE"]) / ".claude" / "plugins" / "cache" / "ticktick-sync" / "ticktick-sync"
 target = newest_version_dir(CACHE)
+
+# Where sync.py sits inside the plugin (moved here from the plugin root when
+# the repo adopted the skill layout). This launcher lives in the data
+# directory and deliberately OUTLIVES plugin updates and runs under
+# pythonw.exe -- no console, and BEFORE sync.py has set up its own logging --
+# so a silent runpy.run_path() failure on a path that moved again would kill
+# the five-minute job with nothing anywhere, not even sync.log, to say why.
+# Fail loudly instead: name the exact path this looked for.
+entry = target / "skills/ticktick-sync/scripts/sync.py"
+if not entry.is_file():
+    raise SystemExit("sync.py not found at %s -- the plugin layout moved and "
+                      "this launcher was not updated to match" % entry)
+
 sys.path.insert(0, str(target))
-sys.argv = [str(target / "sync.py")] + sys.argv[1:]
-runpy.run_path(str(target / "sync.py"), run_name="__main__")
+sys.argv = [str(entry)] + sys.argv[1:]
+runpy.run_path(str(entry), run_name="__main__")
 '@
 Set-Content -Path "$dataDir\launcher.pyw" -Value $launcher -Encoding utf8
 

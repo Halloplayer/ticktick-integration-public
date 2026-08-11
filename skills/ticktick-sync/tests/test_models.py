@@ -3,9 +3,10 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "lib"))
 
-from ticktick_sync import models  # noqa: E402
+import models  # noqa: E402
 
 
 class KeyTest(unittest.TestCase):
@@ -207,7 +208,7 @@ class MarkerTest(unittest.TestCase):
     def test_a_marker_is_found_after_a_leading_title_translation_line(self):
         """The body may now open with an English title-translation line
         before the description (see the title_en / title_sha256 mechanism in
-        ticktick_sync.github) -- key_from_body must still recover the key
+        lib.github) -- key_from_body must still recover the key
         regardless, since it is the only thing preventing duplicate tasks."""
         body = "An English title.\n\nAn English description.\n\nSource: x\n[sync:oi-a]"
 

@@ -6,7 +6,7 @@ import json
 import urllib.error
 import urllib.request
 
-from .models import Task, display_tags, key_from_body, tag_set
+from models import Task, display_tags, key_from_body, tag_set
 
 BASE = "https://api.ticktick.com/open/v1"
 DONE = 2  # TickTick: status 2 == done

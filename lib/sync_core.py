@@ -1,8 +1,8 @@
 """The wiring: guard, resolve, reconcile, apply, remember."""
-from .models import Complete, Create, Reopen, Update
-from .reconcile import guard_collapse, reconcile
-from .state import load_state, save_state
-from .ticktick import TickTickError
+from models import Complete, Create, Reopen, Update
+from reconcile import guard_collapse, reconcile
+from state import load_state, save_state
+from ticktick import TickTickError
 
 
 def run_sync(config, client, desired, state_path):

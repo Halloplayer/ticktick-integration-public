@@ -13,7 +13,7 @@ import re
 import subprocess
 import tomllib
 
-from .models import (CLARIFICATION_TAG, DRAFT_TAG, NON_ISSUE_TAGS, PLAIN_PRIORITY_TAGS,
+from models import (CLARIFICATION_TAG, DRAFT_TAG, NON_ISSUE_TAGS, PLAIN_PRIORITY_TAGS,
                      PRIORITY_TAGS, PROPOSED_PRIORITY_TAGS, Item, check_tag, issue_key,
                      item_key, marker, sanitise, tag_set)
 

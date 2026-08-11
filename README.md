@@ -4,6 +4,25 @@ Mirrors the open work of a GitHub repo (open issues plus a neutral item list,
 `open-items.toml`) into a TickTick list. One-way and strict: the repo is
 always right, and TickTick is brought to match it, never the other way round.
 
+## Install
+
+This is a **private** plugin in a private repository -- it is not listed on any
+public marketplace, and `"license": "UNLICENSED"` in `.claude-plugin/plugin.json`
+grants no rights to anyone. Registering it needs a `gh` login that already has
+access to the repo:
+
+```powershell
+claude plugin marketplace add Halloplayer/ticktick-sync
+claude plugin install ticktick-sync@ticktick-sync
+```
+
+Skill and engine then come from the plugin cache, and this repo does not need to
+stay cloned -- except to run the one-time setup below, which uses
+`skills/ticktick-sync/scripts/`.
+
+Changing the plugin rather than using it: see [`DEVELOPMENT.md`](DEVELOPMENT.md)
+and [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
 ## One-time setup
 
 1. Put your TickTick API token in `%LOCALAPPDATA%\ticktick-sync\.env` as:
@@ -13,9 +32,9 @@ always right, and TickTick is brought to match it, never the other way round.
    (`TICKTICK_TOKEN=` also works, if that name is already in use elsewhere.)
 2. The target TickTick list must already exist -- create it by hand once in
    TickTick. The mirror never creates a list itself, only tasks inside one.
-3. Install the background job:
+3. Install the background job -- from the root of this repo:
    ```powershell
-   powershell -ExecutionPolicy Bypass -File C:\Users\you\workspace\ticktick-sync\tools\install_task.ps1
+   powershell -ExecutionPolicy Bypass -File .\skills\ticktick-sync\scripts\install_task.ps1
    ```
    This registers a Windows Scheduled Task named `TickTickSync` that runs
    every 5 minutes, on battery too, and catches up a run that was missed
@@ -179,7 +198,7 @@ translation comes from.
 ## Running it by hand
 
 ```powershell
-PYTHONIOENCODING=utf-8 python sync.py
+$env:PYTHONIOENCODING="utf-8"; python skills\ticktick-sync\scripts\sync.py
 ```
 
 The output is one line: `ok desired=N created=A updated=U reopened=R completed=C`.

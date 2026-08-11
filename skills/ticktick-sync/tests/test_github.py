@@ -4,9 +4,10 @@ import sys
 import tomllib
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "lib"))
 
-from ticktick_sync import github, models  # noqa: E402
+import github, models  # noqa: E402
 
 ISSUES = [
     {"number": 12, "title": "Pruefung der importierten Datensaetze",
@@ -564,11 +565,42 @@ class TagScopeTest(unittest.TestCase):
         self.assertEqual(frozenset(), github.issues_to_items(ISSUES)["gh-11"].tags)
 
 
-LIVE_ITEMS = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                          "..", "..", "globex-toolkit-dev", "open-items.toml")
+def _wiki_dir():
+    """Locate the globex-toolkit-dev working copy beside this repo.
+
+    A hard-coded number of "..\" segments is exactly what broke this once
+    already: the tests moved a directory deeper (tests/ -> skills/ticktick-sync/
+    tests/) and a fixed depth silently stopped resolving, so all five guards
+    below fell back to "skipped" instead of failing loudly. Walk up from this
+    file to the ticktick-sync repo root (marked by .git) instead, so a future
+    move of the tests does not quietly disable these again. TICKTICK_SYNC_WIKI_DIR
+    overrides the search outright, for a machine where the two repos are not
+    simple workspace siblings.
+    """
+    override = os.environ.get("TICKTICK_SYNC_WIKI_DIR")
+    if override:
+        return override
+    directory = os.path.abspath(os.path.dirname(__file__))
+    while True:
+        if os.path.isdir(os.path.join(directory, ".git")):
+            return os.path.join(os.path.dirname(directory), "globex-toolkit-dev")
+        parent = os.path.dirname(directory)
+        if parent == directory:
+            # Filesystem root reached without finding a repo root -- fall back
+            # to "beside wherever this file happens to live" so LIVE_ITEMS below
+            # still resolves to *some* path, and the skip reason names it.
+            here = os.path.abspath(os.path.dirname(__file__))
+            return os.path.join(os.path.dirname(here), "globex-toolkit-dev")
+        directory = parent
 
 
-@unittest.skipUnless(os.path.exists(LIVE_ITEMS), "the wiki working copy is not on this machine")
+WIKI_DIR = _wiki_dir()
+LIVE_ITEMS = os.path.join(WIKI_DIR, "open-items.toml")
+
+
+@unittest.skipUnless(os.path.exists(LIVE_ITEMS),
+                      "wiki working copy not found -- looked for %s (set "
+                      "TICKTICK_SYNC_WIKI_DIR to override)" % LIVE_ITEMS)
 class LiveItemFileTest(unittest.TestCase):
     """The real file, parsed by the real code.
 
