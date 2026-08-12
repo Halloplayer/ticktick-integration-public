@@ -8,6 +8,15 @@ convention existed, and back-filling them would mean inventing numbers.
 
 ## [Unreleased]
 
+### Added
+
+- A `LICENSE` file, and with it an actual licensing decision: the plugin is now
+  MIT. Until now the only statement of rights was a `"license": "UNLICENSED"`
+  token inside the plugin manifest -- inherited from when this repository was
+  not public, never chosen for the world to read, and invisible at the place a
+  reader or GitHub itself looks. The manifest and the README's install section
+  now agree with the licence file.
+
 ### Fixed
 
 - The documented install no longer points at a repository that does not exist.

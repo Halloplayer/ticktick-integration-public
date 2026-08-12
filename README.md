@@ -13,10 +13,10 @@ on.
 
 ## Install
 
-This repository is public, but the plugin is **not** open source: `"license":
-"UNLICENSED"` in `.claude-plugin/plugin.json` grants no rights to anyone. It is
-not listed on any marketplace index either -- registering it means pointing
-Claude Code at this repository directly, which needs no special access:
+This repository is public and the plugin is open source under the MIT licence
+(see [`LICENSE`](LICENSE)). It is not listed on any marketplace index, so
+registering it means pointing Claude Code at this repository directly, which
+needs no special access:
 
 ```powershell
 claude plugin marketplace add Halloplayer/ticktick-integration-public
