@@ -6,6 +6,23 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 Effort markers (`[~Xh]`) are deliberately absent: this repo was built before the
 convention existed, and back-filling them would mean inventing numbers.
 
+## [Unreleased]
+
+### Fixed
+
+- The documented install no longer points at a repository that does not exist.
+  `README.md` and the manifest's `repository` field both named a repository that
+  has since been deleted, so `claude plugin marketplace add` failed outright for
+  anyone following the instructions. Both now name this repository.
+- `README.md` and `CONTRIBUTING.md` described this as a private repository. It is
+  public, and one of those claims did real work: the note explaining why branch
+  protection is only softly enforced justified it with a limitation that applies
+  to private repositories, so the reasoning inverted the moment this repo became
+  public. Protection is available here; it is simply not configured yet.
+- The `sync` rename below left five commands in `README.md` and `DEVELOPMENT.md`
+  calling `skills\ticktick-integration\scripts\`, a path that has not existed
+  since that rename. They now call `skills\sync\scripts\`.
+
 ## [4.1.0]
 
 ### Changed

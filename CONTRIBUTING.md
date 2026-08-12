@@ -6,10 +6,9 @@ branch's HEAD into `~/.claude/plugins/cache/`, so:
 > **`master` = production.** What lands here is what the 5-minute background job
 > on somebody's machine runs next tick.
 
-> **Note:** server-side branch protection is **not available** on this **private**
-> repo under the GitHub **free** plan (HTTP 403, "Upgrade to GitHub Pro or make
-> this repository public"). Enforcement is therefore **soft**: this convention
-> plus the local `pre-push` hook.
+> **Note:** server-side branch protection **is** available on this public repo,
+> but is **not configured** today. Enforcement is therefore **soft** for now:
+> this convention plus the local `pre-push` hook.
 
 ## One-time setup after cloning
 

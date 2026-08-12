@@ -13,13 +13,13 @@ on.
 
 ## Install
 
-This is a **private** plugin in a private repository -- it is not listed on any
-public marketplace, and `"license": "UNLICENSED"` in `.claude-plugin/plugin.json`
-grants no rights to anyone. Registering it needs a `gh` login that already has
-access to the repo:
+This repository is public, but the plugin is **not** open source: `"license":
+"UNLICENSED"` in `.claude-plugin/plugin.json` grants no rights to anyone. It is
+not listed on any marketplace index either -- registering it means pointing
+Claude Code at this repository directly, which needs no special access:
 
 ```powershell
-claude plugin marketplace add Halloplayer/ticktick-integration
+claude plugin marketplace add Halloplayer/ticktick-integration-public
 claude plugin install ticktick-integration@ticktick-integration
 ```
 
@@ -41,7 +41,7 @@ and [`CONTRIBUTING.md`](CONTRIBUTING.md).
    account.
 2. Install the background job -- from the root of this repo:
    ```powershell
-   powershell -ExecutionPolicy Bypass -File .\skills\ticktick-integration\scripts\install_task.ps1
+   powershell -ExecutionPolicy Bypass -File .\skills\sync\scripts\install_task.ps1
    ```
    This registers a Windows Scheduled Task named `TickTickIntegration` that runs
    every 5 minutes, on battery too, and catches up a run that was missed
@@ -297,8 +297,8 @@ translation comes from.
 ## Running it by hand
 
 ```powershell
-$env:PYTHONIOENCODING="utf-8"; python skills\ticktick-integration\scripts\sync.py
-$env:PYTHONIOENCODING="utf-8"; python skills\ticktick-integration\scripts\sync.py --repo acme__widgets
+$env:PYTHONIOENCODING="utf-8"; python skills\sync\scripts\sync.py
+$env:PYTHONIOENCODING="utf-8"; python skills\sync\scripts\sync.py --repo acme__widgets
 ```
 
 With no `--repo` every configured repository is synced, one after another. The

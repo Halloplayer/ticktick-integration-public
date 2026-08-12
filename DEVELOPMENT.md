@@ -39,7 +39,7 @@ does that insert itself; the tests do the same from `tests/`.
 ## Running it
 
 ```powershell
-$env:PYTHONIOENCODING="utf-8"; python skills\ticktick-integration\scripts\sync.py
+$env:PYTHONIOENCODING="utf-8"; python skills\sync\scripts\sync.py
 ```
 
 Against the working copy this runs the code you just edited. Note that the
@@ -86,7 +86,7 @@ against.
 After changing `install_task.ps1`, re-run it to re-deploy the launcher:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\skills\ticktick-integration\scripts\install_task.ps1
+powershell -ExecutionPolicy Bypass -File .\skills\sync\scripts\install_task.ps1
 ```
 
 ## Data lives apart from code
