@@ -6,21 +6,20 @@ branch's HEAD into `~/.claude/plugins/cache/`, so:
 > **`master` = production.** What lands here is what the 5-minute background job
 > on somebody's machine runs next tick.
 
-> **Note:** server-side branch protection **is** available on this public repo,
-> but is **not configured** today. Enforcement is therefore **soft** for now:
-> this convention plus the local `pre-push` hook.
-
-## One-time setup after cloning
-
-Activate the shipped git hooks:
-
-```bash
-python .githooks/setup.py
-```
-
-That writes the repo-local `core.hooksPath = .githooks`. It is needed once per
-clone -- git does not version `.git/hooks/`, which is why the hooks live tracked
-under `.githooks/`.
+> **Note:** `master` is protected server-side. Force-pushes and deletion of the
+> branch are refused for everyone, administrators included -- the two ways this
+> branch could lose history, and the two the server can refuse without getting
+> in anyone's way. Ordinary direct pushes are **not** gated: in a
+> one-maintainer repo a pull-request requirement costs more than it returns, so
+> the branch-and-PR flow above stays a convention.
+>
+> **No git hook ships to back that convention up, on purpose.** The one that
+> used to be named here never blocked anything -- its only executable line was
+> `exit 0` underneath a comment block describing the barrier it was not. A
+> barrier you believe in and do not have is worse than one you know is missing:
+> the first makes you careless, the second makes you careful. So the guarantees
+> that hold are the ones the server enforces, and they are named above; nothing
+> else is claimed.
 
 ## The one rule that is not style
 
